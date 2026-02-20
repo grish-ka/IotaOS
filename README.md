@@ -9,7 +9,7 @@ A simple OS made for fun
 1. Install Build Dependencies
 ```bash
 sudo apt update
-sudo apt install bison flex libgmp3-dev libmpc-dev libmpfr-dev libisl-dev
+sudo apt install bison flex libgmp3-dev libmpc-dev libmpfr-dev libisl-dev xorriso grub-pc-bin 
 
 # For Texinfo (optional)
 sudo apt install libncurses5-dev libncursesw5-dev
