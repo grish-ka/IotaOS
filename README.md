@@ -8,7 +8,6 @@
 A simple OS made for fun 
 
 # Main Goals For IotaOS
- - Initrd (Initial Ramdisk)
  - Filesystem
    - `.ib` Binarys for execution
  - Syscalls
