@@ -59,28 +59,19 @@ ISR_NOERRCODE 31
 isr_common_stub:
     pushal             /* 1. Save all general-purpose registers */
 
-    movw %ds, %ax      /* 2. Save the current Data Segment */
-    pushl %eax
+    /* ADD THIS: Push a dummy zero to keep C registers_t aligned! */
+    pushl $0
 
-    movw $0x10, %ax    /* 3. Load the Kernel Data Segment (usually 0x10) */
-    movw %ax, %ds
-    movw %ax, %es
-    movw %ax, %fs
-    movw %ax, %gs
-
-    pushl %esp         /* 4. Pass the current stack pointer to C as an argument! */
+    pushl %esp         /* 4. Pass the current stack pointer to C */
     call fault_handler /* 5. Jump to your C code! */
     addl $4, %esp      /* 6. Clean up the pushed argument */
 
-    popl %eax          /* 7. Restore the original Data Segment */
-    movw %ax, %ds
-    movw %ax, %es
-    movw %ax, %fs
-    movw %ax, %gs
+    /* ADD THIS: Clean up the dummy zero we pushed! */
+    addl $4, %esp      
 
     popal              /* 8. Restore all general-purpose registers */
-    addl $8, %esp      /* 9. Clean up the error code and ISR number we pushed */
-    iret               /* 10. Return to exactly what the CPU was doing! */
+    addl $8, %esp      /* 9. Clean up the error code and ISR number */
+    iret               /* 10. Return! */
 
 /* --- HARDWARE INTERRUPTS (IRQs) --- */
 
@@ -97,23 +88,17 @@ irq1:
 /* The master tunnel for all hardware interrupts */
 irq_common_stub:
     pushal
-    movw %ds, %ax
-    pushl %eax
-    movw $0x10, %ax
-    movw %ax, %ds
-    movw %ax, %es
-    movw %ax, %fs
-    movw %ax, %gs
+
+    /* ADD THIS: Push a dummy zero to keep C registers_t aligned! */
+    pushl $0
 
     pushl %esp
     call irq_handler  /* <--- Calls our new C function! */
+    addl $4, %esp     /* Clean up the pushed %esp */
+
+    /* ADD THIS: Clean up the dummy zero we pushed! */
     addl $4, %esp
 
-    popl %eax
-    movw %ax, %ds
-    movw %ax, %es
-    movw %ax, %fs
-    movw %ax, %gs
     popal
     addl $8, %esp
     iret

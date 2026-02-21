@@ -3,6 +3,8 @@
 #include "drivers/keyboard.h"
 #include "drivers/string.h"
 #include "drivers/system.h"
+#include "cpu/idt.h"
+#include "cpu/pic.h"
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */
 #if defined(__linux__)
@@ -19,8 +21,12 @@ void kernel_main(void)
 	/* Initialize terminal interface */
 	terminal_initialize();
 
+    pic_remap();
+
     /* Tell the CPU where the interrupt phonebook is! */
     idt_install();
+
+    __asm__ volatile("sti");
 
 	terminal_writestring("Hello, kernel World!\n");
     terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n");

@@ -1,5 +1,7 @@
 #include "drivers/terminal.h"
 #include "drivers/io.h"
+#include "drivers/keyboard.h"
+#include "drivers/system.h"
 #include "isr.h"
 
 /* A master array of error messages so we don't have to write 32 print statements */
@@ -54,9 +56,31 @@ void fault_handler(registers_t *regs) {
         terminal_writestring("Unknown Exception");
     }
     terminal_writestring("\n The system has been halted to prevent damage.\n");
+    terminal_writestring("Press F1 to reboot...\n");
     
-    /* Freeze the CPU forever */
-    __asm__ volatile("cli; hlt");
+    /* --- HARDWARE POLLING FOR F1 --- */
+
+    /* 1. Flush out any old garbage (like the Enter key you just pressed) */
+    while (inb(0x64) & 1) {
+        inb(0x60);
+    }
+    
+    /* 2. Wait in an infinite loop until F1 (0x3B) is pressed */
+    while (1) {
+        /* If the keyboard controller says a key is ready... */
+        if (inb(0x64) & 1) {
+            uint8_t scancode = inb(0x60); /* Read the key */
+            
+            /* Check if it's the F1 key (0x3B) */
+            if (scancode == 0x3B) {
+                break; /* F1 was pressed! Break the loop and proceed to reboot */
+            }
+        }
+    }
+
+    /* Now we can safely reboot! */
+    reboot();
+    
 }
 
 /* We will write this in your keyboard.c next! */
