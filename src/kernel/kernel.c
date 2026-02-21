@@ -5,6 +5,7 @@
 #include "drivers/system.h"
 #include "cpu/idt.h"
 #include "cpu/pic.h"
+#include "mem/pmm.h"
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */
 #if defined(__linux__)
@@ -28,6 +29,26 @@ void kernel_main(void)
 
     __asm__ volatile("sti");
 
+    /* For now, let's assume 128MB of RAM for testing.
+       We'll place the bitmap at the 1MB mark (safe in most setups). */
+    pmm_init(128 * 1024 * 1024, 0x100000); // 128MB RAM, Bitmap at 1MB
+
+    /* Mark the first 4MB as used. 
+    This covers the BIOS, VGA, the Kernel, and the Bitmap. */
+    for (uint32_t i = 0; i < 0x400000; i += PAGE_SIZE) {
+        pmm_mark_used(i);
+    }
+
+    /* Mark the rest of the 128MB as FREE */
+    for (uint32_t i = 0x400000; i < 128 * 1024 * 1024; i += PAGE_SIZE) {
+        pmm_mark_free(i);
+    }
+
+    /* Mark the first 1MB as used (includes VGA, BIOS, and Kernel) */
+    for(uint32_t i = 0; i < 0x100000; i += PAGE_SIZE) {
+        pmm_mark_used(i);
+    }
+
 	terminal_writestring("Hello, kernel World!\n");
     terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n");
     terminal_writestring("It is designed to run on x86 hardware and serves as a starting point for learning about OS development.\n");
@@ -46,7 +67,6 @@ void kernel_main(void)
     printf("sprintf test: %d, %x, %s, %c, %%\n", 12345, 0xABCD, "hello", 'A');
 
     /* 1. Create the empty bucket */
-/* 1. Create the empty bucket */
     char test_buffer[100]; 
 
     /* 2. Fill the bucket using sprintf */
@@ -70,6 +90,7 @@ void kernel_main(void)
         if (strcmp(cmd, "help") == 0) {
             printf("Available commands:\n");
             printf("  help    - Show this help message\n");
+            printf("  meminfo - Show physical memory usage information\n");
             printf("  test    - Run some basic tests to verify the kernel is working\n");
             printf("  version - Show the kernel and shell version\n");
             printf("  clear   - Clear the terminal screen\n");
@@ -117,6 +138,16 @@ void kernel_main(void)
             */
             __asm__ volatile("int $1");
 
+        } else if (strcmp(cmd, "meminfo") == 0) {
+            uint32_t free = pmm_get_free_block_count();
+            uint32_t total = pmm_get_total_block_count();
+            uint32_t used = total - free;
+
+            printf("Physical Memory Information:\n");
+            printf("  Total Blocks: %d (%d MB)\n", total, (total * 4096) / 1024 / 1024);
+            printf("  Used Blocks:  %d\n", used);
+            printf("  Free Blocks:  %d\n", free);
+            printf("  Page Size:    4096 bytes\n");
         } else if (cmd[0] != '\0') {
             /* Only print "Unknown command" if they actually typed something */
             printf("IOSH: Unknown command: %s\n", cmd);
