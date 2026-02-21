@@ -1,6 +1,16 @@
 # IotaOS
 A simple OS made for fun 
 
+# Main Goals For IotaOS
+ - Filesystem
+   - `ib` Binarys for execution
+ - IDT (Interrupt Descriptor Table)
+ - Initrd (Initial Ramdisk)
+
+# Upcoming Features (Checklist)
+ - [x] IDT (Interrupt Descriptor Table)
+ - [ ] ISR
+ - [ ] Initrd
 # Set Up GCC Cross Compiler
 
 > [!NOTE]

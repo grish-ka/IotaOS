@@ -2,8 +2,8 @@ BUILD_DIR = ./build
 SRC_DIR = ./src
 
 # 1. Automatically find all .c and .s files (Notice drivers are inside kernel/)
-C_SOURCES = $(wildcard $(SRC_DIR)/kernel/*.c) $(wildcard $(SRC_DIR)/kernel/drivers/*.c)
-ASM_SOURCES = $(wildcard $(SRC_DIR)/bootloader/*.s)
+C_SOURCES = $(wildcard $(SRC_DIR)/kernel/*.c) $(wildcard $(SRC_DIR)/kernel/*/*.c)
+ASM_SOURCES = $(wildcard $(SRC_DIR)/bootloader/*.s) $(wildcard $(SRC_DIR)/kernel/*.s) $(wildcard $(SRC_DIR)/kernel/*/*.s)
 
 # 2. Automatically convert the lists of .c and .s files into a list of .o files
 C_OBJECTS = $(C_SOURCES:.c=.o)
@@ -62,5 +62,5 @@ run: all
 
 clean:
 	@echo "Cleaning up..."
-	rm -rf $(SRC_DIR)/**/*.o
+	rm -rf $(ALL_OBJECTS) $(BUILD_DIR)/IotaOS $(BUILD_DIR)/IotaOS.iso
 	rm -rf $(BUILD_DIR)

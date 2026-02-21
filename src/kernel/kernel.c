@@ -19,11 +19,23 @@ void kernel_main(void)
 	/* Initialize terminal interface */
 	terminal_initialize();
 
+    /* Tell the CPU where the interrupt phonebook is! */
+    idt_install();
+
 	terminal_writestring("Hello, kernel World!\n");
     terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n");
     terminal_writestring("It is designed to run on x86 hardware and serves as a starting point for learning about OS development.\n");
 
     printf("\n");
+
+    printf(
+        "  ___     _        ___  ____  \n"
+        " |_ _|___ | |_ __ _ / _ \\/ ___| \n"
+        "  | |/ _ \\| __/ _` | | | \\___ \\ \n"
+        "  | | (_) | || (_| | |_| |___) |\n"
+        " |___\\___/ \\__\\__,_|\\___/|____/ \n\n"
+    );
+
 
     printf("sprintf test: %d, %x, %s, %c, %%\n", 12345, 0xABCD, "hello", 'A');
 
@@ -72,6 +84,13 @@ void kernel_main(void)
             printf("\n");
         }
         else if (strcmp(cmd, "version") == 0) {
+            printf(
+        "  ___ ___  ____  _   _ \n"
+        " |_ _/ _ \\/ ___|| | | |\n"
+        "  | | | | \\___ \\| |_| |\n"
+        "  | | |_| |___) |  _  |\n"
+        " |___\\___/|____/|_| |_|\n\n"
+    );
             printf("IotaOS Kernel Version: 0.1.0-beta.4\n");
             printf("Iota Shell (IOSH) Version: 0.1.0\n");
         }

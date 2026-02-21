@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include "keyboard.h"
 
+// TODO: Add scanf();
+
 /* Helper: Converts a number to a string and puts it in the buffer.
    Returns the number of characters written. */
 static int int_to_string(int num, int base, char* buffer) {
