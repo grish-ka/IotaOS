@@ -16,31 +16,35 @@ const char kbd_US[128] = {
     '*', 0,  ' ', 0,  0,  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0
 };
 
-char keyboard_read(void) {
-    if (inb(KEYBOARD_STATUS_PORT) & 0x01) {
-        uint8_t scancode = inb(KEYBOARD_DATA_PORT);
-        if (scancode < 0x80) {
-            char ascii = kbd_US[scancode];
-            if (ascii != 0) {
-                return ascii;
-            }
+/* A tiny "mailbox" to hold the last key typed */
+volatile char keyboard_buffer = 0;
+
+/* The interrupt automatically runs this exactly once per keypress! */
+void keyboard_handle_interrupt(void) {
+    uint8_t scancode = inb(KEYBOARD_DATA_PORT);
+    
+    /* Only care about the "key pressed down" events (scancodes under 0x80) */
+    if (scancode < 0x80) {
+        char ascii = kbd_US[scancode];
+        if (ascii != 0) {
+            /* Put the letter in the mailbox! */
+            keyboard_buffer = ascii;
         }
     }
-    
-    /* ADD THIS: If we get here, no valid key was pressed! */
-    return 0; 
 }
 
-/* Waits for a keypress and returns the character */
+/* Now getchar just checks the mailbox without locking up the hardware! */
 char getchar(void) {
     char key = 0;
-    while (key == 0) {
-        key = keyboard_read();
+    
+    /* Wait for the interrupt to put something in the mailbox */
+    while (keyboard_buffer == 0) {
+        /* We can put an assembly 'hlt' here later to save power while waiting! */
     }
     
-    /* A tiny, hacky delay so a single key press doesn't register 
-       50 times in a row because modern CPUs are too fast! */
-    for (volatile int i = 0; i < 100000; i++); 
+    /* Grab the key and empty the mailbox */
+    key = keyboard_buffer;
+    keyboard_buffer = 0;
     
     return key;
 }

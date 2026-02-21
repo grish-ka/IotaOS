@@ -1,4 +1,5 @@
 #include "drivers/terminal.h"
+#include "drivers/io.h"
 #include "isr.h"
 
 /* A master array of error messages so we don't have to write 32 print statements */
@@ -56,4 +57,22 @@ void fault_handler(registers_t *regs) {
     
     /* Freeze the CPU forever */
     __asm__ volatile("cli; hlt");
+}
+
+/* We will write this in your keyboard.c next! */
+extern void keyboard_handle_interrupt(void);
+
+/* This handles all hardware interrupts from the PIC */
+void irq_handler(registers_t *regs) {
+    /* If it is Interrupt 33 (IRQ 1), the keyboard caused it! */
+    if (regs->int_no == 33) {
+        keyboard_handle_interrupt();
+    }
+
+    /* Send the "End of Interrupt" (EOI) signal to the PIC.
+       0x20 is the command, sent to port 0x20 (Master PIC). */
+    if (regs->int_no >= 40) {
+        outb(0xA0, 0x20); /* Send to Slave PIC too if necessary */
+    }
+    outb(0x20, 0x20);     /* Always send to Master PIC */
 }

@@ -81,3 +81,39 @@ isr_common_stub:
     popal              /* 8. Restore all general-purpose registers */
     addl $8, %esp      /* 9. Clean up the error code and ISR number we pushed */
     iret               /* 10. Return to exactly what the CPU was doing! */
+
+/* --- HARDWARE INTERRUPTS (IRQs) --- */
+
+.global irq1
+.extern irq_handler
+
+/* IRQ 1 is the Keyboard! It maps to IDT entry 33 */
+irq1:
+    cli
+    pushl $0        /* Dummy error code to keep the stack aligned */
+    pushl $33       /* IDT Entry 33 */
+    jmp irq_common_stub
+
+/* The master tunnel for all hardware interrupts */
+irq_common_stub:
+    pushal
+    movw %ds, %ax
+    pushl %eax
+    movw $0x10, %ax
+    movw %ax, %ds
+    movw %ax, %es
+    movw %ax, %fs
+    movw %ax, %gs
+
+    pushl %esp
+    call irq_handler  /* <--- Calls our new C function! */
+    addl $4, %esp
+
+    popl %eax
+    movw %ax, %ds
+    movw %ax, %es
+    movw %ax, %fs
+    movw %ax, %gs
+    popal
+    addl $8, %esp
+    iret
