@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - stdio.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #include "stdio.h"
 #include "terminal.h" /* So printf can talk to the screen */
 #include <stdint.h>

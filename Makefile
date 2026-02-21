@@ -1,3 +1,9 @@
+# 
+# IotaOS - Makefile
+# Copyright (c) 2026 grish-ka
+# Licensed under the MIT License.
+#
+
 BUILD_DIR = ./build
 SRC_DIR = ./src
 

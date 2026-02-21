@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - pmm.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #include "pmm.h"
 
 uint32_t* pmm_bitmap;

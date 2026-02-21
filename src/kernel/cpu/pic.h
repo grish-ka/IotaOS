@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - pic.h
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #ifndef PIC_H
 #define PIC_H
 

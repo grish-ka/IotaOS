@@ -1,3 +1,9 @@
+ <!-- 
+ IotaOS - README.md
+ Copyright (c) 2026 grish-ka
+ Licensed under the MIT License. 
+ -->
+
 # IotaOS
 A simple OS made for fun 
 
@@ -10,7 +16,7 @@ A simple OS made for fun
 # Upcoming Features (Checklist)
  - [x] IDT (Interrupt Descriptor Table)
  - [x] PMM
- - [ ] Initrd
+ - [x] Initrd
  - [ ] `.ib` Loader
  - [ ] Syscalls
 # Set Up GCC Cross Compiler

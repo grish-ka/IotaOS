@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - system.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #include "system.h"
 #include "io.h"
 #include "stdio.h"

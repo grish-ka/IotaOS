@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - string.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #include "string.h"
 
 /* Returns 0 if strings are exactly the same */

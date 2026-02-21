@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - keyboard.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #include "keyboard.h"
 #include "io.h"
 #include "stdio.h"

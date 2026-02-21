@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - isr_wrapper.s
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 .section .text
 .extern fault_handler
 

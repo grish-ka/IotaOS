@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - kernel.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #include "drivers/terminal.h"
 #include "drivers/stdio.h"
 #include "drivers/keyboard.h"
@@ -17,7 +23,7 @@
 #error "This project needs to be compiled with a ix86-elf compiler"
 #endif
 
-void kernel_main(void) 
+void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
 {
 	/* Initialize terminal interface */
 	terminal_initialize();
@@ -120,6 +126,14 @@ void kernel_main(void)
     );
             printf("IotaOS Kernel Version: 0.1.0-beta.4\n");
             printf("Iota Shell (IOSH) Version: 0.1.0\n");
+
+            printf("All verified IotaOS components (E.g. Kernel, Shell, Drivers) are licensed under the folowing license:\n");
+            printf("\n"
+            "IotaOS\n"
+            "Copyright (c) 2026 grish-ka\n"
+            "Licensed under the MIT License.\n"
+            "\n");
+
         }
         else if (strcmp(cmd, "clear") == 0) {
             /* Resetting the terminal clears the screen naturally */

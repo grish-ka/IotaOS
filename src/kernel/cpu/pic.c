@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - pic.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #include "drivers/io.h"
 
 #define PIC1_COMMAND 0x20

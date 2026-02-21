@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - io.h
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #ifndef IO_H
 #define IO_H
 

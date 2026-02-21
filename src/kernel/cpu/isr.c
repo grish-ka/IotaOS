@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - isr.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #include "drivers/terminal.h"
 #include "drivers/io.h"
 #include "drivers/keyboard.h"

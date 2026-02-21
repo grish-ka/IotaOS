@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - stdio.h
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #ifndef STDIO_H
 #define STDIO_H
 

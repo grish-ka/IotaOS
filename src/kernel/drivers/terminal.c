@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - terminal.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

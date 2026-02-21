@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - boot.s
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 /* Declare constants for the multiboot header. */
 .set ALIGN,    1<<0             /* align loaded modules on page boundaries */
 .set MEMINFO,  1<<1             /* provide memory map */
@@ -84,7 +90,13 @@ _start:
 	stack since (pushed 0 bytes so far), so the alignment has thus been
 	preserved and the call is well defined.
 	*/
-	call kernel_main
+	mov $stack_top, %esp
+
+    /* Push the treasure map to C! */
+    pushl %ebx  /* Pointer to the Multiboot info structure */
+    pushl %eax  /* Multiboot Magic Number */
+
+    call kernel_main
 
 	/*
 	If the system has nothing more to do, put the computer into an

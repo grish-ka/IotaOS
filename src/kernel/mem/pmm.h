@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - pmm.h
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #ifndef PMM_H
 #define PMM_H
 

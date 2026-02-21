@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - isr.h
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #ifndef ISR_H
 #define ISR_H
 
