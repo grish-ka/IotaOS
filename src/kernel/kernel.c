@@ -1,5 +1,4 @@
-/* 
- * IotaOS - kernel.c
+/* * IotaOS - kernel.c
  * Copyright (c) 2026 grish-ka
  * Licensed under the MIT License.
  */
@@ -12,6 +11,8 @@
 #include "cpu/idt.h"
 #include "cpu/pic.h"
 #include "mem/pmm.h"
+#include "multiboot.h"
+#include "fs/tar.h" /* <--- Make sure this is included! */
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */
 #if defined(__linux__)
@@ -25,8 +26,30 @@
 
 void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
 {
-	/* Initialize terminal interface */
-	terminal_initialize();
+    /* Initialize terminal interface */
+    terminal_initialize();
+
+    /* --- MULTIBOOT & RAMDISK PARSING --- */
+    if (magic == MULTIBOOT_BOOTLOADER_MAGIC) {
+        multiboot_info_t* mb_info = (multiboot_info_t*)multiboot_info_addr;
+        
+        /* Check if GRUB loaded modules (Bit 3 of flags) */
+        if (mb_info->flags & (1 << 3) && mb_info->mods_count > 0) {
+            multiboot_module_t* module = (multiboot_module_t*)mb_info->mods_addr;
+            
+            printf("GRUB loaded %d module(s).\n", mb_info->mods_count);
+            printf("Initrd RAM address: 0x%x\n\n", module->mod_start);
+            
+            /* Call the TAR parser to read the ramdisk! */
+            tar_parse(module->mod_start);
+
+        } else {
+            printf("WARNING: No modules loaded by GRUB.\n\n");
+        }
+    } else {
+        printf("PANIC: Invalid Magic Number! Not booted by GRUB.\n");
+    }
+    /* ----------------------------------- */
 
     pic_remap();
 
@@ -55,7 +78,6 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         pmm_mark_used(i);
     }
 
-	terminal_writestring("Hello, kernel World!\n");
     terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n");
     terminal_writestring("It is designed to run on x86 hardware and serves as a starting point for learning about OS development.\n");
 

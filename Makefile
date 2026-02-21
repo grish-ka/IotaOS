@@ -7,26 +7,20 @@
 BUILD_DIR = ./build
 SRC_DIR = ./src
 
-# 1. Automatically find all .c and .s files (Notice drivers are inside kernel/)
 C_SOURCES = $(wildcard $(SRC_DIR)/kernel/*.c) $(wildcard $(SRC_DIR)/kernel/*/*.c)
 ASM_SOURCES = $(wildcard $(SRC_DIR)/bootloader/*.s) $(wildcard $(SRC_DIR)/kernel/*.s) $(wildcard $(SRC_DIR)/kernel/*/*.s)
 
-# 2. Automatically convert the lists of .c and .s files into a list of .o files
 C_OBJECTS = $(C_SOURCES:.c=.o)
 ASM_OBJECTS = $(ASM_SOURCES:.s=.o)
 
-# 3. Combine them into one master list of everything that needs to be linked
 ALL_OBJECTS = $(ASM_OBJECTS) $(C_OBJECTS)
 
-# Compiler flags (-I$(SRC_DIR)/kernel allows #include "drivers/terminal.h" to work)
 CC = i686-elf-gcc
 AS = i686-elf-as
 CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/kernel
 
-# The default rule
 all: $(BUILD_DIR)/IotaOS
 
-# 4. The Linker Rule (Now uses $(ALL_OBJECTS) so it never forgets a driver!)
 $(BUILD_DIR)/IotaOS: $(ALL_OBJECTS)
 	@echo "Linking bootloader, kernel, and drivers..."
 	@mkdir -p $(BUILD_DIR)
@@ -40,28 +34,33 @@ $(BUILD_DIR)/IotaOS: $(ALL_OBJECTS)
 
 run: all
 	@echo "Building ISO..."
-	@# 1. Create a clean, dedicated staging area
 	@mkdir -p $(BUILD_DIR)/iso/boot/grub
+	@mkdir -p $(BUILD_DIR)/initrd_root
 	
-	@# 2. Copy the kernel to the 'boot' folder inside that area
+	@# Copy the kernel
 	cp $(BUILD_DIR)/IotaOS $(BUILD_DIR)/iso/boot/IotaOS
 	
-	@# 3. Copy your grub.cfg to the correct location
+	@# --- CREATE THE UBUNTU-STYLE INITRD ---
+	@echo "Creating test files for the Ramdisk..."
+	@echo "This is the first file!" > $(BUILD_DIR)/initrd_root/file1.txt
+	@echo "IotaOS filesystem is working!" > $(BUILD_DIR)/initrd_root/message.txt
+	
+	@# Pack the folder into an .img file inside the ISO's boot folder
+	cd $(BUILD_DIR)/initrd_root && tar -cf ../iso/boot/initrd.img *
+	
+	@# Copy GRUB config
 	cp grub.cfg $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	
-	@# 4. Point grub-mkrescue ONLY at the 'iso' folder, not the whole 'build' folder
+	@# Build the ISO
 	grub-mkrescue -o $(BUILD_DIR)/IotaOS.iso $(BUILD_DIR)/iso
 	
 	@echo "Booting QEMU..."
 	qemu-system-i386 -cdrom $(BUILD_DIR)/IotaOS.iso
 
-# 5. PATTERN RULES: The "Auto-Cookers"
-# Tell make: "If you need a .o file, find the matching .c file and run this:"
 %.o: %.c
 	@echo "Compiling $<..."
 	$(CC) -c $< -o $@ $(CFLAGS)
 
-# Tell make: "If you need a .o file, find the matching .s file and run this:"
 %.o: %.s
 	@echo "Assembling $<..."
 	$(AS) $< -o $@
