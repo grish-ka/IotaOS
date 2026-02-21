@@ -71,16 +71,16 @@ void kernel_main(void)
             printf("  exit    - Exit the shell and shutdown the system\n");
         } 
         else if (strcmp(cmd, "test") == 0) {
-            printf("\nKeyboard test: type 1234567890abcdef followed by Enter:\n");
             
-            /* Using a safe 128-byte fixed array instead of a variable length one! */
-            char input_buffer_keyboard_test[128]; 
-            gets(input_buffer_keyboard_test, sizeof(input_buffer_keyboard_test));
-            if (strcmp(input_buffer_keyboard_test, "1234567890abcdef") == 0) {
-                printf("Keyboard test passed!\n");
-            } else {
-                printf("Keyboard test failed!\n");
-            }
+            /* * Manually trigger Interrupt 0 (Divide by Zero) to test our IDT 
+            * without the C compiler interfering! 
+            */
+            __asm__ volatile("int $0");
+    
+            printf("We will never reach this line!\n");
+
+            printf("Isr test failed!\n"); /* Dead code ):*/
+            
             printf("\n");
         }
         else if (strcmp(cmd, "version") == 0) {

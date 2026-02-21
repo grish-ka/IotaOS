@@ -1,37 +1,34 @@
 #include "idt.h"
 
-/* Create the actual table of 256 entries */
 struct idt_entry idt[256];
 struct idt_ptr idtp;
 
-/* We need an assembly function to actually tell the CPU where the IDT is.
-   We will write this in a moment! */
-extern void idt_load(uint32_t idt_ptr_address);
+extern void isr0(void);
 
-/* This function fills out a single entry in the phonebook */
 void idt_set_gate(uint8_t num, uint32_t base, uint16_t sel, uint8_t flags) {
-    /* The CPU splits the memory address into two pieces */
     idt[num].isr_low = (base & 0xFFFF);
     idt[num].isr_high = (base >> 16) & 0xFFFF;
-
     idt[num].kernel_cs = sel;
     idt[num].reserved = 0;
-    
-    /* We MUST set the ring level. For syscalls later, we will change this! */
     idt[num].attributes = flags;
 }
 
-/* This is the function we will call in kernel_main to start the IDT */
 void idt_install(void) {
-    /* Set up the pointer for the CPU */
     idtp.limit = (sizeof(struct idt_entry) * 256) - 1;
     idtp.base = (uint32_t)&idt;
 
-    /* Clear out the entire table with zeros to be safe */
+    /* Clear the table */
     for (int i = 0; i < 256; i++) {
         idt_set_gate(i, 0, 0, 0);
     }
 
-    /* Point the CPU's internal register to our table! */
-    idt_load((uint32_t)&idtp);
+    /* 1. DYNAMICALLY grab the exact Code Segment the CPU is using right now */
+    uint16_t current_cs;
+    __asm__ volatile("mov %%cs, %0" : "=r"(current_cs));
+
+    /* 2. Plug that safe Code Segment into our IDT entry */
+    idt_set_gate(0, (uint32_t)isr0, current_cs, 0x8E);
+
+    /* 3. Load the IDT directly from C! (You can delete idt_load.s now!) */
+    __asm__ volatile("lidt %0" : : "m"(idtp));
 }
