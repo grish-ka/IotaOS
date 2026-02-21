@@ -45,3 +45,22 @@ void tar_parse(uint32_t initrd_address) {
     
     printf("--- Ramdisk Mounted! ---\n\n");
 }
+
+/* Add this to the bottom of src/kernel/fs/tar.c */
+void* tar_get_file(uint32_t initrd_address, const char* target_filename) {
+    uint32_t current_address = initrd_address;
+    while (1) {
+        tar_header_t* header = (tar_header_t*)current_address;
+        if (header->filename[0] == '\0') break;
+
+        /* Extract size using that octal helper you already wrote */
+        uint32_t file_size = octal_string_to_int(header->size, 11);
+
+        if (strcmp(header->filename, target_filename) == 0) {
+            return (void*)(current_address + 512); /* Return data after header */
+        }
+
+        current_address += 512 + (((file_size + 511) / 512) * 512);
+    }
+    return (void*)0;
+}

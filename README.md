@@ -16,7 +16,7 @@ A simple OS made for fun
  - [x] IDT (Interrupt Descriptor Table)
  - [x] PMM
  - [x] Initrd
- - [ ] `.ib` Loader
+ - [x] `.ib` Loader
  - [ ] Syscalls
 # Set Up GCC Cross Compiler
 

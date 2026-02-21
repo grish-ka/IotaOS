@@ -8,11 +8,12 @@
 #include "drivers/keyboard.h"
 #include "drivers/string.h"
 #include "drivers/system.h"
+#include "drivers/ib_loader.h"
 #include "cpu/idt.h"
 #include "cpu/pic.h"
 #include "mem/pmm.h"
 #include "multiboot.h"
-#include "fs/tar.h" /* <--- Make sure this is included! */
+#include "fs/tar.h"
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */
 #if defined(__linux__)
@@ -24,46 +25,49 @@
 #error "This project needs to be compiled with a ix86-elf compiler"
 #endif
 
+/* Global variable to store where the ramdisk is in memory so the shell can use it */
+uint32_t global_initrd_address = 0;
+
 void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
 {
     /* Initialize terminal interface */
     terminal_initialize();
 
-    /* --- MULTIBOOT & RAMDISK PARSING --- */
+    /* --- DEBUG MULTIBOOT PARSING --- */
+    printf("Multiboot Check: Magic=0x%x, Addr=0x%x\n", magic, multiboot_info_addr);
+
     if (magic == MULTIBOOT_BOOTLOADER_MAGIC) {
         multiboot_info_t* mb_info = (multiboot_info_t*)multiboot_info_addr;
         
-        /* Check if GRUB loaded modules (Bit 3 of flags) */
-        if (mb_info->flags & (1 << 3) && mb_info->mods_count > 0) {
-            multiboot_module_t* module = (multiboot_module_t*)mb_info->mods_addr;
-            
-            printf("GRUB loaded %d module(s).\n", mb_info->mods_count);
-            printf("Initrd RAM address: 0x%x\n\n", module->mod_start);
-            
-            /* Call the TAR parser to read the ramdisk! */
-            tar_parse(module->mod_start);
+        printf("Multiboot Flags: 0x%x, Modules: %d\n", mb_info->flags, mb_info->mods_count);
 
+        /* Bit 3 is 0x8. Let's check if it's set. */
+        if (mb_info->mods_count > 0) {
+            /* inside kernel_main, after finding the module */
+            multiboot_module_t* module = (multiboot_module_t*)mb_info->mods_addr;
+            global_initrd_address = module->mod_start;
+
+            // Protect the ramdisk so the PMM doesn't give this memory away!
+            for (uint32_t addr = module->mod_start; addr < module->mod_end; addr += PAGE_SIZE) {
+                pmm_mark_used(addr);
+            }
+            
+            printf("Success! Ramdisk found at 0x%x\n", global_initrd_address);
+            tar_parse(global_initrd_address);
         } else {
-            printf("WARNING: No modules loaded by GRUB.\n\n");
+            printf("Error: GRUB reports 0 modules loaded.\n");
         }
     } else {
-        printf("PANIC: Invalid Magic Number! Not booted by GRUB.\n");
+        printf("Error: Magic number mismatch! Check boot.s pushes.\n");
     }
-    /* ----------------------------------- */
-
     pic_remap();
-
-    /* Tell the CPU where the interrupt phonebook is! */
     idt_install();
-
     __asm__ volatile("sti");
 
-    /* For now, let's assume 128MB of RAM for testing.
-       We'll place the bitmap at the 1MB mark (safe in most setups). */
-    pmm_init(128 * 1024 * 1024, 0x100000); // 128MB RAM, Bitmap at 1MB
+    /* PMM Initialization (128MB RAM, Bitmap at 1MB) */
+    pmm_init(128 * 1024 * 1024, 0x100000); 
 
-    /* Mark the first 4MB as used. 
-    This covers the BIOS, VGA, the Kernel, and the Bitmap. */
+    /* Mark the first 4MB as used (BIOS, VGA, Kernel, and the Bitmap) */
     for (uint32_t i = 0; i < 0x400000; i += PAGE_SIZE) {
         pmm_mark_used(i);
     }
@@ -73,15 +77,13 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         pmm_mark_free(i);
     }
 
-    /* Mark the first 1MB as used (includes VGA, BIOS, and Kernel) */
+    /* Double check marking the first 1MB as used */
     for(uint32_t i = 0; i < 0x100000; i += PAGE_SIZE) {
         pmm_mark_used(i);
     }
 
-    terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n");
-    terminal_writestring("It is designed to run on x86 hardware and serves as a starting point for learning about OS development.\n");
-
-    printf("\n");
+    terminal_writestring("Hello, kernel World!\n");
+    terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n\n");
 
     printf(
         "  ___     _        ___  ____  \n"
@@ -91,74 +93,51 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         " |___\\___/ \\__\\__,_|\\___/|____/ \n\n"
     );
 
-
-    printf("sprintf test: %d, %x, %s, %c, %%\n", 12345, 0xABCD, "hello", 'A');
-
-    /* 1. Create the empty bucket */
-    char test_buffer[100]; 
-
-    /* 2. Fill the bucket using sprintf */
-    sprintf(test_buffer, "sprintf test: %d, %x, %s, %c, %%\n", 12345, 0xABCD, "hello", 'A');
-
-    /* 4. Check if the text inside the bucket matches what we expect! */
-    const char* expected_output = "sprintf test: 12345, abcd, hello, A, %\n";
-    
-    if (strcmp(test_buffer, expected_output) == 0) {
-        terminal_writestring("sprintf test passed!\n");
-    } else {
-        terminal_writestring("sprintf test failed!\n");
-    }
-
-    printf("\n");
+    printf("Welcome to IotaOS Shell (IOSH)!\n");
 
     while (1) {
         printf("user@IotaOS$ ");
         char cmd[256];
         gets(cmd, sizeof(cmd));
+        
         if (strcmp(cmd, "help") == 0) {
             printf("Available commands:\n");
             printf("  help    - Show this help message\n");
+            printf("  ls      - List files in the ramdisk\n");
+            printf("  run     - Execute an .ib file (e.g. 'run test.ib')\n");
             printf("  meminfo - Show physical memory usage information\n");
-            printf("  test    - Run some basic tests to verify the kernel is working\n");
             printf("  version - Show the kernel and shell version\n");
             printf("  clear   - Clear the terminal screen\n");
             printf("  reboot  - Reboot the system\n");
             printf("  exit    - Exit the shell and shutdown the system\n");
         } 
-        else if (strcmp(cmd, "test") == 0) {
+        else if (strcmp(cmd, "ls") == 0) {
+            if (global_initrd_address == 0) {
+                printf("Error: No ramdisk loaded.\n");
+            } else {
+                tar_parse(global_initrd_address);
+            }
+        }
+        else if (cmd[0] == '.' && cmd[1] == '/') {
+            char* filename = &cmd[2]; /* Extract filename after "run " */
             
-            /* * Manually trigger Interrupt 1 (Debug) to test our IDT 
-            * without the C compiler interfering! 
-            */
-            __asm__ volatile("int $1");
-    
-            printf("We will never reach this line!\n"); /* If we do, something went very wrong with our IDT setup! */
-
-            printf("Isr test failed!\n"); /* Dead code ):*/
-            
-            printf("\n");
+            if (global_initrd_address == 0) {
+                printf("Error: No ramdisk loaded.\n");
+            } else {
+                void* file_data = tar_get_file(global_initrd_address, filename);
+                if (file_data == NULL) {
+                    printf("Error: File '%s' not found.\n", filename);
+                } else {
+                    ib_load_and_run(file_data);
+                }
+            }
         }
         else if (strcmp(cmd, "version") == 0) {
-            printf(
-        "  ___ ___  ____  _   _ \n"
-        " |_ _/ _ \\/ ___|| | | |\n"
-        "  | | | | \\___ \\| |_| |\n"
-        "  | | |_| |___) |  _  |\n"
-        " |___\\___/|____/|_| |_|\n\n"
-    );
             printf("IotaOS Kernel Version: 0.1.0-beta.4\n");
             printf("Iota Shell (IOSH) Version: 0.1.0\n");
-
-            printf("All verified IotaOS components (E.g. Kernel, Shell, Drivers) are licensed under the folowing license:\n");
-            printf("\n"
-            "IotaOS\n"
-            "Copyright (c) 2026 grish-ka\n"
-            "Licensed under the MIT License.\n"
-            "\n");
-
+            printf("Copyright (c) 2026 grish-ka. Licensed under MIT.\n");
         }
         else if (strcmp(cmd, "clear") == 0) {
-            /* Resetting the terminal clears the screen naturally */
             terminal_clear();
         }
         else if (strcmp(cmd, "reboot") == 0) {
@@ -166,30 +145,14 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         }
         else if (strcmp(cmd, "exit") == 0) {
             shutdown();
-        } else if (strcmp(cmd, "bsod") == 0) {
-
-            /* Trigger a Blue Screen of Death (BSOD) by manually invoking an interrupt */
-            /* * Manually trigger Interrupt 1 (Debug) to bsod our IDT 
-            * without the C compiler interfering! 
-            */
-            __asm__ volatile("int $1");
-
-        } else if (strcmp(cmd, "meminfo") == 0) {
+        }
+        else if (strcmp(cmd, "meminfo") == 0) {
             uint32_t free = pmm_get_free_block_count();
             uint32_t total = pmm_get_total_block_count();
-            uint32_t used = total - free;
-
-            printf("Physical Memory Information:\n");
-            printf("  Total Blocks: %d (%d MB)\n", total, (total * 4096) / 1024 / 1024);
-            printf("  Used Blocks:  %d\n", used);
-            printf("  Free Blocks:  %d\n", free);
-            printf("  Page Size:    4096 bytes\n");
-        } else if (cmd[0] != '\0') {
-            /* Only print "Unknown command" if they actually typed something */
+            printf("Physical Memory: %d/%d MB Free\n", (free * 4096) / 1024 / 1024, (total * 4096) / 1024 / 1024);
+        }
+        else if (cmd[0] != '\0') {
             printf("IOSH: Unknown command: %s\n", cmd);
         }
     }
-
-    shutdown();
-
 }
