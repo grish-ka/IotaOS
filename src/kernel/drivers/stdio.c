@@ -2,6 +2,7 @@
 #include "terminal.h" /* So printf can talk to the screen */
 #include <stdint.h>
 #include <stddef.h>
+#include "keyboard.h"
 
 /* Helper: Converts a number to a string and puts it in the buffer.
    Returns the number of characters written. */
@@ -124,4 +125,61 @@ void printf(const char* format, ...) {
         format++;
     }
     va_end(args);
+}
+
+/* Converts a string of numbers into an actual integer */
+int atoi(const char* str) {
+    int result = 0;
+    int sign = 1;
+
+    /* Skip spaces */
+    while (*str == ' ') {
+        str++;
+    }
+
+    /* Check for negative numbers */
+    if (*str == '-') {
+        sign = -1;
+        str++;
+    }
+
+    /* Convert characters to math */
+    while (*str >= '0' && *str <= '9') {
+        /* Multiply current result by 10 and add the new digit.
+           We subtract '0' (ASCII 48) to get the real math number. */
+        result = result * 10 + (*str - '0');
+        str++;
+    }
+
+    return result * sign;
+}
+
+/* Reads a line of text from the keyboard into a buffer */
+void gets(char* buffer, int max_size) {
+    int count = 0;
+    
+    while (count < max_size - 1) {
+        char c = getchar();
+        
+        if (c == '\n') {
+            printf("\n");
+            break; /* Enter key pressed, stop reading! */
+        } 
+        else if (c == '\b') {
+            /* Handle Backspace */
+            if (count > 0) {
+                count--;
+                /* Send a backspace to the terminal to erase it visually */
+                printf("\b"); 
+            }
+        } 
+        else if (c != 0) {
+            /* Normal character: save it and print it so the user can see it */
+            buffer[count++] = c;
+            printf("%c", c);
+        }
+    }
+    
+    /* Always cap off strings with a null terminator! */
+    buffer[count] = '\0'; 
 }

@@ -1,4 +1,8 @@
 #include "drivers/terminal.h"
+#include "drivers/stdio.h"
+#include "drivers/keyboard.h"
+#include "drivers/string.h"
+#include "drivers/system.h"
 
 /* Check if the compiler thinks you are targeting the wrong operating system. */
 #if defined(__linux__)
@@ -19,14 +23,73 @@ void kernel_main(void)
     terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n");
     terminal_writestring("It is designed to run on x86 hardware and serves as a starting point for learning about OS development.\n");
 
-    printf("Current version: %s\n", "0.1.0-beta.5");
+    printf("\n");
 
     printf("sprintf test: %d, %x, %s, %c, %%\n", 12345, 0xABCD, "hello", 'A');
 
-    if (sprintf("sprintf test: %d, %x, %s, %c\n", 12345, 0xABCD, "hello", 'A') == "sprintf test: 12345, abcd, hello, A,\n") {
+    /* 1. Create the empty bucket */
+/* 1. Create the empty bucket */
+    char test_buffer[100]; 
+
+    /* 2. Fill the bucket using sprintf */
+    sprintf(test_buffer, "sprintf test: %d, %x, %s, %c, %%\n", 12345, 0xABCD, "hello", 'A');
+
+    /* 4. Check if the text inside the bucket matches what we expect! */
+    const char* expected_output = "sprintf test: 12345, abcd, hello, A, %\n";
+    
+    if (strcmp(test_buffer, expected_output) == 0) {
         terminal_writestring("sprintf test passed!\n");
     } else {
         terminal_writestring("sprintf test failed!\n");
     }
+
+    printf("\n");
+
+    while (1) {
+        printf("user@IotaOS$ ");
+        char cmd[256];
+        gets(cmd, sizeof(cmd));
+        if (strcmp(cmd, "help") == 0) {
+            printf("Available commands:\n");
+            printf("  help    - Show this help message\n");
+            printf("  test    - Run some basic tests to verify the kernel is working\n");
+            printf("  version - Show the kernel and shell version\n");
+            printf("  clear   - Clear the terminal screen\n");
+            printf("  reboot  - Reboot the system\n");
+            printf("  exit    - Exit the shell and shutdown the system\n");
+        } 
+        else if (strcmp(cmd, "test") == 0) {
+            printf("\nKeyboard test: type 1234567890abcdef followed by Enter:\n");
+            
+            /* Using a safe 128-byte fixed array instead of a variable length one! */
+            char input_buffer_keyboard_test[128]; 
+            gets(input_buffer_keyboard_test, sizeof(input_buffer_keyboard_test));
+            if (strcmp(input_buffer_keyboard_test, "1234567890abcdef") == 0) {
+                printf("Keyboard test passed!\n");
+            } else {
+                printf("Keyboard test failed!\n");
+            }
+            printf("\n");
+        }
+        else if (strcmp(cmd, "version") == 0) {
+            printf("IotaOS Kernel Version: 0.1.0-beta.4\n");
+            printf("Iota Shell (IOSH) Version: 0.1.0\n");
+        }
+        else if (strcmp(cmd, "clear") == 0) {
+            /* Resetting the terminal clears the screen naturally */
+            terminal_clear();
+        }
+        else if (strcmp(cmd, "reboot") == 0) {
+            reboot();
+        }
+        else if (strcmp(cmd, "exit") == 0) {
+            shutdown();
+        } else if (cmd[0] != '\0') {
+            /* Only print "Unknown command" if they actually typed something */
+            printf("IOSH: Unknown command: %s\n", cmd);
+        }
+    }
+
+    shutdown();
 
 }
