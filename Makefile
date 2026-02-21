@@ -1,10 +1,30 @@
 BUILD_DIR = ./build
 SRC_DIR = ./src
 
-all: bootloader kernel
-	@echo "Linking bootloader and kernel..."
+# 1. Automatically find all .c and .s files (Notice drivers are inside kernel/)
+C_SOURCES = $(wildcard $(SRC_DIR)/kernel/*.c) $(wildcard $(SRC_DIR)/kernel/drivers/*.c)
+ASM_SOURCES = $(wildcard $(SRC_DIR)/bootloader/*.s)
+
+# 2. Automatically convert the lists of .c and .s files into a list of .o files
+C_OBJECTS = $(C_SOURCES:.c=.o)
+ASM_OBJECTS = $(ASM_SOURCES:.s=.o)
+
+# 3. Combine them into one master list of everything that needs to be linked
+ALL_OBJECTS = $(ASM_OBJECTS) $(C_OBJECTS)
+
+# Compiler flags (-I$(SRC_DIR)/kernel allows #include "drivers/terminal.h" to work)
+CC = i686-elf-gcc
+AS = i686-elf-as
+CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(SRC_DIR)/kernel
+
+# The default rule
+all: $(BUILD_DIR)/IotaOS
+
+# 4. The Linker Rule (Now uses $(ALL_OBJECTS) so it never forgets a driver!)
+$(BUILD_DIR)/IotaOS: $(ALL_OBJECTS)
+	@echo "Linking bootloader, kernel, and drivers..."
 	@mkdir -p $(BUILD_DIR)
-	i686-elf-gcc -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/IotaOS -ffreestanding -O2 -nostdlib $(SRC_DIR)/bootloader/boot.o $(SRC_DIR)/kernel/kernel.o -lgcc
+	$(CC) -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/IotaOS -ffreestanding -O2 -nostdlib $(ALL_OBJECTS) -lgcc
 	@if grub-file --is-x86-multiboot $(BUILD_DIR)/IotaOS; then \
 		echo "multiboot confirmed"; \
 	else \
@@ -29,15 +49,18 @@ run: all
 	@echo "Booting QEMU..."
 	qemu-system-i386 -cdrom $(BUILD_DIR)/IotaOS.iso
 
-bootloader: $(SRC_DIR)/bootloader/boot.s
-	@echo "Assembling bootloader..."
-	i686-elf-as $(SRC_DIR)/bootloader/boot.s -o $(SRC_DIR)/bootloader/boot.o
+# 5. PATTERN RULES: The "Auto-Cookers"
+# Tell make: "If you need a .o file, find the matching .c file and run this:"
+%.o: %.c
+	@echo "Compiling $<..."
+	$(CC) -c $< -o $@ $(CFLAGS)
 
-kernel: $(SRC_DIR)/kernel/kernel.c
-	@echo "Compiling kernel..."
-	i686-elf-gcc -c $(SRC_DIR)/kernel/kernel.c -o $(SRC_DIR)/kernel/kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+# Tell make: "If you need a .o file, find the matching .s file and run this:"
+%.o: %.s
+	@echo "Assembling $<..."
+	$(AS) $< -o $@
 
 clean:
 	@echo "Cleaning up..."
-	find $(SRC_DIR) -type f -name "*.o" -delete
+	rm -rf $(SRC_DIR)/**/*.o
 	rm -rf $(BUILD_DIR)
