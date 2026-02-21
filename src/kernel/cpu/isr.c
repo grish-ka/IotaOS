@@ -1,30 +1,59 @@
 #include "drivers/terminal.h"
-#include "drivers/stdio.h"
+#include "isr.h"
 
-/* This is the function called by our assembly wrapper */
-void isr0_handler(void) {
-    
-    terminal_setcolor(VGA_COLOR_WHITE | VGA_COLOR_BLUE << 4);
+/* A master array of error messages so we don't have to write 32 print statements */
+char *exception_messages[] = {
+    "Division By Zero",
+    "Debug",
+    "Non Maskable Interrupt",
+    "Breakpoint",
+    "Into Detected Overflow",
+    "Out of Bounds",
+    "Invalid Opcode",
+    "No Coprocessor",
+    "Double Fault",
+    "Coprocessor Segment Overrun",
+    "Bad TSS",
+    "Segment Not Present",
+    "Stack Fault",
+    "General Protection Fault",
+    "Page Fault",
+    "Unknown Interrupt",
+    "Coprocessor Fault",
+    "Alignment Check",
+    "Machine Check",
+    "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
+    "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
+    "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
+    "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
+    "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
+    "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
+    "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
+    "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
+    "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
+    "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
+    "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)"
+};
+
+/* The master function that all 32 assembly wrappers will call */
+void fault_handler(registers_t *regs) {
+    /* Set our beautiful Blue Screen of Death colors! */
+    terminal_setcolor(15 | 1 << 4); /* White text (15) on Blue (1) */
     terminal_clear();
-    /* Print a scary error message */
+    
     terminal_writestring("\n==================================================\n");
     terminal_writestring("                  KERNEL PANIC                      \n");
     terminal_writestring("==================================================\n");
-    terminal_writestring(" Exception: Divide by Zero (ISR 0)\n");
-    terminal_writestring(" The system has been halted to prevent damage.\n");
+    
+    /* Dynamically print which error caused the crash! */
+    terminal_writestring(" Exception: ");
+    if (regs->int_no < 32) {
+        terminal_writestring(exception_messages[regs->int_no]);
+    } else {
+        terminal_writestring("Unknown Exception");
+    }
+    terminal_writestring("\n The system has been halted to prevent damage.\n");
     
     /* Freeze the CPU forever */
     __asm__ volatile("cli; hlt");
 }
-/* isr.c */
-// void isr0_handler(void) {
-//     /* 1. Point a pointer directly at the VGA text buffer */
-//     char* video_memory = (char*) 0xB8000;
-    
-//     /* 2. Overwrite the top-left character on the screen */
-//     video_memory[0] = 'E';    /* The character */
-//     video_memory[1] = 0x4F;   /* The color: 4 = Red Background, F = White Text */
-    
-//     /* 3. Freeze the system */
-//     __asm__ volatile("cli; hlt");
-// }

@@ -72,12 +72,12 @@ void kernel_main(void)
         } 
         else if (strcmp(cmd, "test") == 0) {
             
-            /* * Manually trigger Interrupt 0 (Divide by Zero) to test our IDT 
+            /* * Manually trigger Interrupt 1 (Debug) to test our IDT 
             * without the C compiler interfering! 
             */
-            __asm__ volatile("int $0");
+            __asm__ volatile("int $1");
     
-            printf("We will never reach this line!\n");
+            printf("We will never reach this line!\n"); /* If we do, something went very wrong with our IDT setup! */
 
             printf("Isr test failed!\n"); /* Dead code ):*/
             
@@ -103,6 +103,14 @@ void kernel_main(void)
         }
         else if (strcmp(cmd, "exit") == 0) {
             shutdown();
+        } else if (strcmp(cmd, "bsod") == 0) {
+
+            /* Trigger a Blue Screen of Death (BSOD) by manually invoking an interrupt */
+            /* * Manually trigger Interrupt 1 (Debug) to bsod our IDT 
+            * without the C compiler interfering! 
+            */
+            __asm__ volatile("int $1");
+
         } else if (cmd[0] != '\0') {
             /* Only print "Unknown command" if they actually typed something */
             printf("IOSH: Unknown command: %s\n", cmd);
