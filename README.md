@@ -9,7 +9,8 @@ A simple OS made for fun
 
 # Upcoming Features (Checklist)
  - [x] IDT (Interrupt Descriptor Table)
- - [ ] ISR
+ - [x] ISR
+ - [ ] IRQ
  - [ ] Initrd
 # Set Up GCC Cross Compiler
 
