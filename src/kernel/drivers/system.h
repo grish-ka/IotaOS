@@ -7,6 +7,8 @@
 #ifndef SYSTEM_H
 #define SYSTEM_H
 
+void panic(const char* message);
+
 void shutdown(void);
 void reboot(void);
 

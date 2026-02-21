@@ -34,12 +34,12 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
     terminal_initialize();
 
     /* --- DEBUG MULTIBOOT PARSING --- */
-    printf("Multiboot Check: Magic=0x%x, Addr=0x%x\n", magic, multiboot_info_addr);
+    // printf("Multiboot Check: Magic=0x%x, Addr=0x%x\n", magic, multiboot_info_addr);
 
     if (magic == MULTIBOOT_BOOTLOADER_MAGIC) {
         multiboot_info_t* mb_info = (multiboot_info_t*)multiboot_info_addr;
         
-        printf("Multiboot Flags: 0x%x, Modules: %d\n", mb_info->flags, mb_info->mods_count);
+        // printf("Multiboot Flags: 0x%x, Modules: %d\n", mb_info->flags, mb_info->mods_count);
 
         /* Bit 3 is 0x8. Let's check if it's set. */
         if (mb_info->mods_count > 0) {
@@ -52,13 +52,13 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
                 pmm_mark_used(addr);
             }
             
-            printf("Success! Ramdisk found at 0x%x\n", global_initrd_address);
+            // printf("Success! Ramdisk found at 0x%x\n", global_initrd_address);
             tar_parse(global_initrd_address);
         } else {
-            printf("Error: GRUB reports 0 modules loaded.\n");
+            panic("Error: GRUB reports 0 modules loaded.\n");
         }
     } else {
-        printf("Error: Magic number mismatch! Check boot.s pushes.\n");
+        panic("Error: Magic number mismatch! Check boot.s pushes.\n");
     }
     pic_remap();
     idt_install();
@@ -145,6 +145,9 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         }
         else if (strcmp(cmd, "exit") == 0) {
             shutdown();
+        }
+        else if (strcmp(cmd, "bsod") == 0) {
+            __asm__ volatile("int $1"); /* Trigger a debug fault for testing the BSOD */
         }
         else if (strcmp(cmd, "meminfo") == 0) {
             uint32_t free = pmm_get_free_block_count();
