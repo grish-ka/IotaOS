@@ -1,4 +1,4 @@
-/* * IotaOS - syscallTest.s
+/* * IotaOS - test.s
  * Copyright (c) 2026 grish-ka
  * Licensed under the MIT License.
  */
@@ -7,23 +7,26 @@
 .section .text
 .global _start
 
-/* --- IOTA BINARY (.ib) HEADER --- */
-.short 0x4249       /* magic: 0x4249 ('I' 'B') */
-.short 1            /* version: 1 */
-.long  16           /* code_offset: 16 bytes (size of this header) */
-.long  44           /* code_size: 13 bytes */
-.long  0            /* entry_point: 0 (start immediately after header) */
-
 _start:
-    call next_line       /* Push current EIP to stack */
+    /* --- IOTA BINARY (.ib) HEADER --- */
+    .short 0x4249       /* magic: 'IB' */
+    .short 1            /* version: 1 */
+    .long  16           /* code_offset */
+    .long  (test_end - _start) 
+    .long  0            /* entry_point */
+
+/* The actual logic starts at offset 16 */
+actual_start:
+    call next_line
 next_line:
-    pop %ebx             /* EBX now knows exactly where we are in RAM */
-    add $(msg - next_line), %ebx /* Offset EBX to point to the string */
+    pop %ebx
+    add $(msg - next_line), %ebx
 
-    mov $1, %eax         /* Syscall 1: PRINT */
+    mov $1, %eax
     int $0x80
-
-    ret                  /* Back to Kernel Shell */
+    ret
 
 msg:
     .asciz "IotaOS: Syscall Success!\n"
+
+test_end:

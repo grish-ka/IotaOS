@@ -31,7 +31,7 @@ def main():
         if os.path.exists(directory):
             for root, _, files in os.walk(directory):
                 for file in files:
-                    if file.endswith(('.c', '.h', '.s')):
+                    if file.endswith(('.c', '.h', '.s', '.ld')):
                         all_files.append(os.path.join(root, file))
         else:
             print(f"Warning: Directory '{directory}' not found.")
