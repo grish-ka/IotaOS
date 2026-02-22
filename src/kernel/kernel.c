@@ -82,6 +82,8 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         pmm_mark_used(i);
     }
 
+    char* IOTAOS_VERSION = "0.1.0-beta.";
+
     terminal_writestring("Hello, kernel World!\n");
     terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n\n");
 
@@ -133,7 +135,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
             }
         }
         else if (strcmp(cmd, "version") == 0) {
-            printf("IotaOS Kernel Version: 0.1.0-beta.4\n");
+            printf("IotaOS Kernel Version: %s.\n", IOTAOS_VERSION);
             printf("Iota Shell (IOSH) Version: 0.1.0\n");
             printf("Copyright (c) 2026 grish-ka. Licensed under MIT.\n");
         }

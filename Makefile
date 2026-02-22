@@ -53,8 +53,9 @@ $(BUILD_DIR)/initrd_root/%.ib: $(APPS_DIR)/%.c $(APPS_DIR)/crt0.s $(APPS_DIR)/li
 	# 4. BINARY: Create the final file
 	$(OBJCOPY) -O binary $(BUILD_DIR)/$*.elf $@
 	
-	# Debug: Print the first few bytes to terminal during build
-	@hexdump -C $@ | head -n 1
+	@python3 -c "import sys; f=open('$@', 'rb'); b=f.read(2); \
+	if b != b'IB': print('\n\033[31m[BUILD ERROR] Magic Number Missing in $@! Found:', b.hex(), '\033[0m\n'); sys.exit(1); \
+	else: print('\033[32m[OK] Header Verified: $@\033[0m')"
 
 # --- ASM APP BUILD ---
 $(BUILD_DIR)/initrd_root/%.ib: $(APPS_DIR)/%.s
