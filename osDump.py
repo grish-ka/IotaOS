@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+
+# 
+# IotaOS - osDump.py
+# Copyright (c) 2026 grish-ka
+# Licensed under the MIT License.
+#
+
 import os
 import datetime
 

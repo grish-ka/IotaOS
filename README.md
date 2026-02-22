@@ -17,7 +17,9 @@ A simple OS made for fun
  - [x] PMM
  - [x] Initrd
  - [x] `.ib` Loader
- - [ ] Syscalls
+ - [x] Syscalls
+ - [ ] Syscalls Extended
+ - [ ] Full `stdio`
 # Set Up GCC Cross Compiler
 
 > [!NOTE]

@@ -91,6 +91,29 @@ irq1:
     pushl $33       /* IDT Entry 33 */
     jmp irq_common_stub
 
+.global irq128
+.extern syscall_handler
+
+/* This is triggered by 'int $0x80' */
+irq128:
+    cli
+    pushl $0          /* Dummy error code */
+    pushl $128        /* Interrupt number 128 (0x80) */
+    
+    pushal            /* Save EAX, EBX, ECX, EDX, ESI, EDI, EBP */
+
+    /* --- ADD THIS LINE TO FIX THE ALIGNMENT --- */
+    pushl $0          /* Dummy 'ds' to match registers_t struct */
+
+    /* Pass the pointer to the registers to our C function */
+    pushl %esp        
+    call syscall_handler
+    addl $4, %esp     /* Cleans up the pushl %esp */
+    addl $4, %esp     /* Cleans up the dummy zero/ds! CRITICAL */
+
+    popal             
+    addl $8, %esp     
+    iret
 /* The master tunnel for all hardware interrupts */
 irq_common_stub:
     pushal

@@ -11,6 +11,7 @@ struct idt_ptr idtp;
 
 /* Declare all IRQs */
 extern void irq1(void);
+extern void irq128(void);
 
 /* Declare all 32 assembly wrappers so C knows they exist */
 extern void isr0(void);
@@ -102,6 +103,12 @@ void idt_install(void) {
     idt_set_gate(31, (uint32_t)isr31, current_cs, 0x8E);
 
     idt_set_gate(33, (uint32_t)irq1, current_cs, 0x8E);
+    /* 
+    * 0xEE (1110 1110) is the magic:
+    * The 'E' tells the CPU this is a 32-bit Interrupt Gate.
+    * The other 'E' sets the Privilege Level to 3 (Userland).
+    */
+    idt_set_gate(128, (uint32_t)irq128, current_cs, 0xEE);
 
     /* Load the IDT into the CPU */
     __asm__ volatile("lidt %0" : : "m"(idtp));
