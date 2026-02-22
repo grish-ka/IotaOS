@@ -3,10 +3,10 @@
  * Licensed under the MIT License.
  */
 .code32
-.section .entry
+.section .entry, "a"  # "a" means Allocatable
 .extern bin_end
 
-/* TODO: This file is bugged and needs to be fixed. The .entry section is not being included in the final binary, which means the header is missing and the bootloader won't load the kernel. This is likely an issue with the linker script, but it needs to be investigated. */
+// DOING: #1 [BUG] `.ib` header being ignored
 
 /* --- IOTA BINARY (.ib) HEADER --- */
 /* This data is at Byte 0 */
