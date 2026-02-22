@@ -21,5 +21,13 @@
 .extern main
 
 _start:
+    /* Write '!' (Yellow on Blue) to the top-left of the screen */
+    /* 0xB8000 is the start of VGA text memory */
+    mov $0xB8000, %edi
+    movb $'!', (%edi)      /* Character */
+    movb $0x1E, 1(%edi)    /* Attribute: 1=Blue BG, E=Yellow FG */
+
     /* This code is at Byte 16 */
     call main
+
+    ret

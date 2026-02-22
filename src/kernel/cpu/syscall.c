@@ -8,27 +8,19 @@
 #include "drivers/system.h"
 
 void syscall_handler(registers_t *regs) {
-    /* * WRONG: switch(regs->int_no)  <-- This would be 128
-     * RIGHT: switch(regs->eax)     <-- This is your actual command
-     */
-
     switch (regs->eax) {
         case 0: /* SYS_PANIC */
             panic((char*)regs->ebx);
             break;
 
         case 1: /* SYS_PRINT */
-            terminal_writestring((char*)regs->ebx);
+            /* C App puts pointer in ECX. 
+               We also need to add the base address where the app was loaded! */
+            terminal_writestring((char*)regs->ecx); 
             break;
 
         case 2: /* SYS_REBOOT */
             reboot();
-            break;
-
-        default:
-            /* If EAX is 0, but it falls through to here, 
-               check if your registers_t struct is aligned correctly! */
-            printf("IotaOS: Unknown Syscall %d (from Int %d)\n", regs->eax, regs->int_no);
             break;
     }
 }

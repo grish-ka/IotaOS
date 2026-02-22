@@ -8,14 +8,3 @@ build
 *.o
 
 os_dump.txt
-
-backlog
-
-# imdone-cli internal data
-.imdone/data/
-.imdone/logs/
-.imdone/cache/
-
-# If you use the imdone-cli generated markdown files for kanban
-# but don't want them in the repo:
-imdone-docs/

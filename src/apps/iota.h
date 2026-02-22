@@ -11,22 +11,21 @@
 
 /* Syscall Wrappers */
 
-static inline void iota_print(const char* str) {
-    uint32_t real_addr;
+static inline void iota_print(const char* str, uint32_t len) {
     __asm__ volatile (
-        "call 1f\n"         /* Push EIP to stack */
-        "1: pop %%eax\n"    /* Pop EIP into EAX */
-        "sub $(1b), %%eax\n" /* Subtract the compiled offset of '1b' */
-        "add %1, %%eax\n"   /* Add the offset of our string */
-        "mov %%eax, %%ebx\n"
-        "mov $1, %%eax\n"
+        "call 1f\n"
+        "1: pop %%eax\n"            /* Get current EIP */
+        "sub $(1b), %%eax\n"        /* Subtract link-time address of '1' */
+        "add %0, %%eax\n"           /* Add the pointer 'str' */
+        "mov %%eax, %%ecx\n"        /* ECX now has the ACTUAL address in RAM */
+        "mov $1, %%eax\n"           /* Syscall 1 */
+        "mov $1, %%ebx\n"           /* FD 1 */
         "int $0x80"
-        : "=a"(real_addr) 
-        : "r"(str) 
-        : "ebx"
+        : 
+        : "r"(str), "r"(len)
+        : "eax", "ebx", "ecx", "edx"
     );
 }
-
 static inline void iota_reboot() {
     __asm__ volatile (
         "mov $2, %eax\n"

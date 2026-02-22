@@ -7,6 +7,5 @@
 #include "iota.h"
 
 void main() {
-    iota_print("IotaOS: C App is running perfectly!\n");
-    // iota_reboot();
+    iota_print("IotaOS: C App is running perfectly!\n", 34);
 }
