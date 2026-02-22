@@ -11,5 +11,5 @@ labels: bug
 - **Hex Dump (if binary issue):**
 ## 🎯 Steps to Reproduce
 1. `make clean && make`
-2. Describe the command you ran in the IOSH shell (or internel kernel).
+2. Describe the command you ran in the IOSH shell (or internal kernel).
 3. Observed behavior vs. Expected behavior.

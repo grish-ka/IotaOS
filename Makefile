@@ -54,8 +54,8 @@ $(BUILD_DIR)/initrd_root/%.ib: $(APPS_DIR)/%.c $(APPS_DIR)/crt0.s $(APPS_DIR)/li
 	$(OBJCOPY) -O binary $(BUILD_DIR)/$*.elf $@
 	
 	@python3 -c "import sys; f=open('$@', 'rb'); b=f.read(2); \
-	if b != b'IB': print('\n\033[31m[BUILD ERROR] Magic Number Missing in $@! Found:', b.hex(), '\033[0m\n'); sys.exit(1); \
-	else: print('\033[32m[OK] Header Verified: $@\033[0m')"
+	print('\033[32m[OK] Header Verified: $@\033[0m' if b == b'IB' else '\n\033[31m[BUILD ERROR] Magic Number Missing in $@! Found: ' + b.hex() + '\033[0m\n'); \
+	sys.exit(0 if b == b'IB' else 1)"
 
 # --- ASM APP BUILD ---
 $(BUILD_DIR)/initrd_root/%.ib: $(APPS_DIR)/%.s
