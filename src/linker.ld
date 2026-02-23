@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - linker.ld
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 /* The bootloader will look at this image and start execution at the symbol
    designated as the entry point. */
 ENTRY(_start)

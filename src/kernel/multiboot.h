@@ -1,4 +1,5 @@
-/* * IotaOS - multiboot.h
+/* 
+ * IotaOS - multiboot.h
  * Copyright (c) 2026 grish-ka
  * Licensed under the MIT License.
  */

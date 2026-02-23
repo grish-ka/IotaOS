@@ -1,4 +1,5 @@
-/* * IotaOS - ib_loader.c
+/* 
+ * IotaOS - ib_loader.c
  * Copyright (c) 2026 grish-ka
  * Licensed under the MIT License.
  */

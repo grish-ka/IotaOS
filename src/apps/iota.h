@@ -1,8 +1,8 @@
-/* * IotaOS - iota.h
+/* 
+ * IotaOS - iota.h
  * Copyright (c) 2026 grish-ka
  * Licensed under the MIT License.
  */
-
 
 #ifndef IOTA_H
 #define IOTA_H

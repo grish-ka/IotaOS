@@ -1,4 +1,5 @@
-/* * IotaOS - test.s
+/* 
+ * IotaOS - test.s
  * Copyright (c) 2026 grish-ka
  * Licensed under the MIT License.
  */

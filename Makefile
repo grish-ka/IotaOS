@@ -1,8 +1,9 @@
-# IotaOS - Makefile (Fixed for App Automation)
+#
+# IotaOS - Makefile
 # Copyright (c) 2026 grish-ka
 # Licensed under the MIT License.
+#
 
-# Directories
 BUILD_DIR = ./build
 SRC_DIR = ./src
 APPS_DIR = $(SRC_DIR)/apps
@@ -30,7 +31,7 @@ APP_SOURCES = $(filter-out $(APPS_DIR)/crt0.s, $(ALL_APP_FILES))
 APP_BINARIES = $(patsubst $(APPS_DIR)/%.s, $(BUILD_DIR)/initrd_root/%.ib, \
                $(patsubst $(APPS_DIR)/%.c, $(BUILD_DIR)/initrd_root/%.ib, $(APP_SOURCES)))
 
-all: $(BUILD_DIR)/IotaOS $(APP_BINARIES)
+all: $(BUILD_DIR)/IotaOS $(APP_BINARIES) sync
 
 # --- KERNEL BUILD ---
 $(BUILD_DIR)/IotaOS: $(ALL_OBJECTS)
@@ -76,5 +77,12 @@ run: all
 	grub-mkrescue -o $(BUILD_DIR)/IotaOS.iso $(BUILD_DIR)/iso
 	qemu-system-i386 -cdrom $(BUILD_DIR)/IotaOS.iso
 
+# ... existing build rules ...
+
+sync:
+	@chmod +x tools/sync_tasks.sh
+	@./tools/sync_tasks.sh
+	@echo "Local Taskwarrior Status:"
+	@task project:IotaOS next
 clean:
 	rm -rf $(ALL_OBJECTS) $(BUILD_DIR)

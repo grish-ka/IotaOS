@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - syscall.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 /* * IotaOS - syscall.c
  * Copyright (c) 2026 grish-ka
  */

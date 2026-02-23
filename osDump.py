@@ -11,7 +11,7 @@ import datetime
 
 # Configuration
 OUTPUT_FILE = "os_dump.txt"
-DIRECTORIES_TO_SCAN = ["src"]
+DIRECTORIES_TO_SCAN = ["src", "tools"]
 EXPLICIT_FILES = ["Makefile", "grub.cfg"]
 
 def get_markdown_lang(filename):

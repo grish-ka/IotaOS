@@ -1,4 +1,5 @@
-/* * IotaOS - kernel.c
+/* 
+ * IotaOS - kernel.c
  * Copyright (c) 2026 grish-ka
  * Licensed under the MIT License.
  */

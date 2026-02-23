@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - idt.h
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 #ifndef IDT_H
 #define IDT_H
 

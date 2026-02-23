@@ -1,3 +1,9 @@
+/* 
+ * IotaOS - iosh.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
+
 /* * IotaOS - iosh.c (The IotaOS
  Shell)
  * Ported from kernel_main to Userland

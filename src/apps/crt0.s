@@ -1,7 +1,9 @@
-/* * IotaOS - crt0.s
+/* 
+ * IotaOS - crt0.s
  * Copyright (c) 2026 grish-ka
  * Licensed under the MIT License.
  */
+
 .code32
 .section .entry, "a"  # "a" means Allocatable
 .extern bin_end
