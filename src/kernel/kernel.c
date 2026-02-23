@@ -95,6 +95,15 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         " |___\\___/ \\__\\__,_|\\___/|____/ \n\n"
     );
 
+    void* sh_file = tar_get_file(global_initrd_address, "iosh.ib");
+    if (sh_file) {
+        ib_load_and_run(sh_file);
+    } else {
+        panic("Critical Error: iosh.ib not found in ramdisk!");
+    }
+
+    /* The shell should never return to this point. This is an archive of iosh in kernel v0.1.0-beta.24  ever scince version v0.1.0-beta.3*/
+
     printf("Welcome to IotaOS Shell (IOSH)!\n");
 
     while (1) {
@@ -135,8 +144,8 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
             }
         }
         else if (strcmp(cmd, "version") == 0) {
-            printf("IotaOS Kernel Version: %s.\n", IOTAOS_VERSION);
-            printf("Iota Shell (IOSH) Version: 0.1.0\n");
+            printf("IotaOS Kernel Version: %s.\n", "0.1.0-beta.24");
+            printf("Iota Shell (IOSH) Version: 0.1.0-beta.7\n");
             printf("Copyright (c) 2026 grish-ka. Licensed under MIT.\n");
         }
         else if (strcmp(cmd, "clear") == 0) {

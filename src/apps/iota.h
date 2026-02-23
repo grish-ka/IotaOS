@@ -42,4 +42,25 @@ static inline void iota_panic(const char* msg) {
     );
 }
 
+static inline int iota_strcmp(const char* s1, const char* s2) {
+    while (*s1 && (*s1 == *s2)) {
+        s1++; s2++;
+    }
+    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+}
+
+static inline void iota_get_line(char* buf, int size) {
+    __asm__ volatile (
+        "mov $3, %%eax\n"  /* Must be 3 for SYS_READ_LINE */
+        "mov %0, %%ebx\n"
+        "mov %1, %%ecx\n"
+        "int $0x80"
+        : : "r"(buf), "r"(size) : "eax", "ebx", "ecx"
+    );
+}
+
+static inline void iota_clear() {
+    __asm__ volatile ("mov $4, %eax; int $0x80"); /* Must be 4 */
+}
+
 #endif
