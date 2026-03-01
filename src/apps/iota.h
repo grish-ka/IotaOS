@@ -36,13 +36,13 @@ static inline void iota_print_str(const char* str) {
 }
 
 static inline void iota_ls() {
-    __asm__ volatile ("mov $7, %%eax; int $0x80" ::: "eax");
+    __asm__ volatile ("mov $8, %%eax; int $0x80" ::: "eax");
 }
 
 static inline void iota_exec(const char* filename) {
     __asm__ volatile (
         "mov %0, %%ebx\n"
-        "mov $8, %%eax\n"
+        "mov $7, %%eax\n"
         "int $0x80"
         : : "r"(filename) : "eax", "ebx"
     );
@@ -52,8 +52,13 @@ static inline void iota_reboot() {
     __asm__ volatile ("mov $2, %%eax; int $0x80" ::: "eax");
 }
 
-static inline void iota_exit() {
-    __asm__ volatile ("mov $6, %%eax; int $0x80" ::: "eax");
+static inline void iota_exit(int exit_code) {
+    __asm__ volatile (
+        "mov %0, %%ebx\n"    /* Put our exit_code into EBX */
+        "mov $6, %%eax\n"    /* SYS_EXIT */
+        "int $0x80"
+        : : "r"(exit_code) : "eax", "ebx"
+    );
 }
 
 static inline void iota_meminfo(uint32_t* free, uint32_t* total) {

@@ -11,5 +11,5 @@ void main() {
     iota_print_str(IOTA_RELOC("IotaOS: C App is running perfectly!\n"));
     
     /* We should also exit gracefully so it returns to the shell */
-    iota_exit(); 
+    iota_exit(0); 
 }

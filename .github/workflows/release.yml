@@ -1,68 +1,45 @@
-name: Release IotaOS
-
-permissions:
-  contents: write
+name: IotaOS CI Build
 
 on:
   push:
+    branches: [ "main" ]
     tags:
-      - "v*"
+      - 'v*' # Trigger on version tags too
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
-  build-os:
-    name: Build Bootable ISO
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 1. SETUP CROSS-COMPILER & GRUB TOOLS
-      - name: Install Toolchain & Dependencies
+      - name: Install ISO & Bootloader Tools
         run: |
           sudo apt-get update
-          # Use Ubuntu's built-in i686 cross-compiler (acts exactly like i686-elf when using -ffreestanding)
-          sudo apt-get install -y gcc-i686-linux-gnu binutils-i686-linux-gnu
-          # Install ISO generation tools
-          sudo apt-get install -y xorriso grub-pc-bin grub-common mtools
+          sudo apt-get install -y xorriso grub-pc-bin mtools
 
-      # 2. BUILD KERNEL AND APPS
+      - name: Setup i686-elf GCC Cross-Compiler
+        run: |
+          echo "Downloading pre-compiled OSdev toolchain..."
+          wget -q https://github.com/lordmilko/i686-elf-tools/releases/download/7.1.0/i686-elf-tools-linux.zip
+          unzip -q i686-elf-tools-linux.zip -d /tmp/i686-elf-toolchain
+          
+          # Add the downloaded bin folder to the GitHub Actions PATH
+          echo "/tmp/i686-elf-toolchain/bin" >> $GITHUB_PATH
+
+      - name: Verify Toolchain
+        run: |
+          i686-elf-gcc --version
+          i686-elf-ld --version
+
       - name: Compile IotaOS
-        run: |
-          # Override your Makefile variables to use the CI runner's compiler
-          make all CC=i686-linux-gnu-gcc AS=i686-linux-gnu-as LD=i686-linux-gnu-ld OBJCOPY=i686-linux-gnu-objcopy
+        run: make clean && make
 
-      # 3. GENERATE THE ISO
-      - name: Build Bootable ISO
-        run: |
-          # We manually run the ISO steps here instead of 'make run'
-          # If we used 'make run', QEMU would launch and freeze the GitHub Action forever!
-          mkdir -p build/iso/boot/grub
-          mkdir -p build/initrd_root
-          cp build/IotaOS build/iso/boot/IotaOS
-          
-          # Pack the Ramdisk
-          cd build/initrd_root && tar -cf ../iso/boot/initrd.img *
-          cd ../../
-          
-          # Build the ISO
-          cp grub.cfg build/iso/boot/grub/grub.cfg
-          grub-mkrescue -o build/IotaOS.iso build/iso
-
-      # 4. PREPARE FILES FOR RELEASE
-      - name: Rename Artifacts
-        run: |
-          # Inject the version tag (e.g., v0.1.0) into the file names
-          mv build/IotaOS.iso IotaOS-${{ github.ref_name }}.iso
-          mv build/IotaOS IotaOS-kernel-${{ github.ref_name }}.bin
-
-      # 5. UPLOAD TO GITHUB
-      - name: Upload to Release
-        uses: softprops/action-gh-release@v1
+      - name: Upload ISO Artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: |
-            IotaOS-*.iso
-            IotaOS-kernel-*.bin
-          prerelease: ${{ contains(github.ref, '-') }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: IotaOS-Stable-ISO
+          path: build/IotaOS.iso

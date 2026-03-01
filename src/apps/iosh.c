@@ -64,7 +64,7 @@ void main() {
             iota_reboot();
         }
         else if (iota_strcmp((char*)cmd, IOTA_RELOC("exit")) == 0) {
-            iota_exit();
+            iota_exit(0); /* Exit with code 0 for success */
         }
         else if (iota_strcmp((char*)cmd, IOTA_RELOC("bsod")) == 0) {
             __asm__ volatile("int $1");
