@@ -8,8 +8,6 @@
 .section .entry, "a"  # "a" means Allocatable
 .extern bin_end
 
-// DOING: #1 [BUG] `.ib` header being ignored
-
 /* --- IOTA BINARY (.ib) HEADER --- */
 /* This data is at Byte 0 */
 .short 0x4249       /* magic 'IB' */

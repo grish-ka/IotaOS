@@ -83,7 +83,8 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         pmm_mark_used(i);
     }
 
-    char* IOTAOS_VERSION = "0.1.0-beta.27";
+    char* IOTAOS_VERSION = "0.1.0-beta.28";
+    char* IOTAOS_KERNEL_VERSION = "0.1.0-rc.1";
 
     terminal_writestring("Hello, kernel World!\n");
     terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n\n");
@@ -103,7 +104,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         panic("Critical Error: iosh.ib not found in ramdisk!");
     }
 
-    /* The shell should never return to this point. This is an archive of iosh in kernel v0.1.0-beta.24  ever scince version v0.1.0-beta.3*/
+    /* The shell should never return to this point. This is an archive of iosh in kernel v0.1.0-beta.24 ever since version v0.1.0-beta.3*/
 
     printf("Welcome to IotaOS Shell (IOSH)!\n");
 
@@ -145,7 +146,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
             }
         }
         else if (strcmp(cmd, "version") == 0) {
-            printf("IotaOS Kernel Version: %s.\n", "0.1.0-beta.24");
+            printf("IotaOS Kernel Version: %s.\n", IOTAOS_KERNEL_VERSION);
             printf("Iota Shell (IOSH) Version: 0.1.0-beta.7\n");
             printf("Copyright (c) 2026 grish-ka. Licensed under MIT.\n");
         }

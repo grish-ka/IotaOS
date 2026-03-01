@@ -31,7 +31,7 @@ APP_SOURCES = $(filter-out $(APPS_DIR)/crt0.s, $(ALL_APP_FILES))
 APP_BINARIES = $(patsubst $(APPS_DIR)/%.s, $(BUILD_DIR)/initrd_root/%.ib, \
                $(patsubst $(APPS_DIR)/%.c, $(BUILD_DIR)/initrd_root/%.ib, $(APP_SOURCES)))
 
-all: $(BUILD_DIR)/IotaOS $(APP_BINARIES) sync
+all: $(BUILD_DIR)/IotaOS $(APP_BINARIES)
 
 # --- KERNEL BUILD ---
 $(BUILD_DIR)/IotaOS: $(ALL_OBJECTS)

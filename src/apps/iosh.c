@@ -1,48 +1,48 @@
-/* 
- * IotaOS - iosh.c
- * Copyright (c) 2026 grish-ka
- * Licensed under the MIT License.
- */
+/*
+* IotaOS - iosh.c
+* Copyright (c) 2026 grish-ka
+* Licensed under the MIT License.
+*/
 
-/* * IotaOS - iosh.c (The IotaOS
- Shell)
- * Ported from kernel_main to Userland
- * Copyright (c) 2026 grish-ka
- */
+// DONE: If statements not working in iosh.c
 
 #include "iota.h"
 
-// We need a way to read input from Userland. 
-// For now, we'll assume the kernel provides a SYS_READ (3) or similar.
-// Since you don't have a full stdio yet, we'll use a local helper.
-
 void main() {
-    iota_print("\nWelcome to Iota Shell (IOSH)!\n", 31);
+    // Note: We use IOTA_RELOC for the string literal
+    iota_print(IOTA_RELOC("\nWelcome to Iota Shell (IOSH) v0.1.0!\n"), 38);
+    
     char cmd[256];
+    // Zero the buffer
+    // for(int i = 0; i < 256; i++) cmd[i] = 0;
 
     while (1) {
-        iota_print("user@IotaOS$ ", 13);
-        
-        // IMPORTANT: You'll need to implement a SYS_READ_LINE syscall
-        // to get input from the keyboard driver back up to this app.
+        iota_print(IOTA_RELOC("user@IotaOS$ "), 13);
         iota_get_line(cmd, 256);
         
-        if (iota_strcmp(cmd, "help") == 0) {
-            iota_print("Available commands:\n", 20);
-            iota_print("  help    - Show this help\n", 27);
-            iota_print("  ls      - List ramdisk files\n", 31);
-            iota_print("  clear   - Clear screen\n", 25);
-            iota_print("  reboot  - Reboot IotaOS\n", 26);
+        iota_print(cmd, iota_strlen(cmd));
+        iota_print(IOTA_RELOC("\n"), 1);
+
+        if (iota_strcmp(cmd, IOTA_RELOC("help")) == 0) {
+            iota_print(IOTA_RELOC("Available: help, ls, version, clear\n"), 36);
         } 
-        else if (iota_strcmp(cmd, "clear") == 0) {
-            // Syscall for clearing the screen
-            iota_clear(); 
+        else if (iota_strcmp(cmd, IOTA_RELOC("ls")) == 0) {
+            iota_print(IOTA_RELOC("bin/  dev/  iosh.ib  test.ib\n"), 29);
         }
-        else if (iota_strcmp(cmd, "reboot") == 0) {
-            iota_reboot();
+        else if (iota_strcmp(cmd, IOTA_RELOC("clear")) == 0) {
+            iota_clear();
         }
-        else if (cmd[0] != '\0') {
-            iota_print("IOSH: Unknown command\n", 22);
+        else if (iota_strcmp(cmd, IOTA_RELOC("version")) == 0) {
+            iota_print(IOTA_RELOC("IotaOS v0.1.0 (Stable)\n"), 23);
+        } 
+        else if (cmd[0] == '\0') {
+            continue;
         }
+        else {
+            iota_print(IOTA_RELOC("Unknown command: "), 17);
+            iota_print(cmd, iota_strlen(cmd));
+            iota_print(IOTA_RELOC("\n"), 1);
+        }
+        iota_print(IOTA_RELOC("I made it here\n"), 17);
     }
 }

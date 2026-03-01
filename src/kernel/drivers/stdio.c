@@ -173,6 +173,9 @@ void gets(char* buffer, int max_size) {
             printf("\n");
             break; /* Enter key pressed, stop reading! */
         } 
+        else if (c == '\r') {
+            continue; /* Skip the carriage return character */
+        }
         else if (c == '\b') {
             /* Handle Backspace */
             if (count > 0) {

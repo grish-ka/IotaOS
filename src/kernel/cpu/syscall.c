@@ -4,9 +4,6 @@
  * Licensed under the MIT License.
  */
 
-/* * IotaOS - syscall.c
- * Copyright (c) 2026 grish-ka
- */
 #include "cpu/isr.h"
 #include "drivers/stdio.h"
 #include "drivers/terminal.h"
