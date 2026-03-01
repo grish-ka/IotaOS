@@ -9,17 +9,12 @@
 
 #include <stdint.h>
 
-/**
- * IOTA_RELOC: Calculates the base offset at RUNTIME.
- * The &(ptr)[0] trick forces the compiler to treat arrays as pointers,
- * fixing the "cast specifies array type" error.
- */
 #define IOTA_RELOC(ptr) ({ \
     uintptr_t __base; \
     __asm__ volatile ( \
         "call 1f\n" \
-        "1: pop %0\n"      /* Get current EIP */ \
-        "sub $1b, %0\n"    /* Subtract link-time address of label '1' */ \
+        "1: pop %0\n" \
+        "sub $1b, %0\n" \
         : "=r"(__base) \
     ); \
     (typeof(&(ptr)[0]))((uintptr_t)(ptr) + __base); \
@@ -27,46 +22,72 @@
 
 /* --- Syscall Wrappers --- */
 
-static inline void iota_print(const char* str, uint32_t len) {
+// Renamed to match your iosh.c calls
+static inline void iota_print_str(const char* str) {
+    uint32_t len = 0;
+    while (str[len]) len++;
     __asm__ volatile (
+        "mov %0, %%ecx\n"
+        "mov $1, %%eax\n"
+        "mov $1, %%ebx\n"
         "int $0x80"
-        : 
-        : "a"(1), "b"(1), "c"(str), "d"(len)
-        : "memory"
+        : : "r"(str), "r"(len) : "eax", "ebx", "ecx"
     );
+}
+
+static inline void iota_ls() {
+    __asm__ volatile ("mov $7, %%eax; int $0x80" ::: "eax");
+}
+
+static inline void iota_exec(const char* filename) {
+    __asm__ volatile (
+        "mov %0, %%ebx\n"
+        "mov $8, %%eax\n"
+        "int $0x80"
+        : : "r"(filename) : "eax", "ebx"
+    );
+}
+
+static inline void iota_reboot() {
+    __asm__ volatile ("mov $2, %%eax; int $0x80" ::: "eax");
+}
+
+static inline void iota_exit() {
+    __asm__ volatile ("mov $6, %%eax; int $0x80" ::: "eax");
+}
+
+static inline void iota_meminfo(uint32_t* free, uint32_t* total) {
+    uint32_t f, t;
+    __asm__ volatile (
+        "mov $5, %%eax\n"
+        "int $0x80\n"
+        : "=a"(f), "=b"(t) : : 
+    );
+    if(free) *free = f;
+    if(total) *total = t;
 }
 
 static inline void iota_get_line(char* buf, int size) {
     __asm__ volatile (
+        "mov $3, %%eax\n"
+        "mov %0, %%ebx\n"
+        "mov %1, %%ecx\n"
         "int $0x80"
-        : 
-        : "a"(3), "b"(buf), "c"(size)
-        : "memory"
+        : : "r"(buf), "r"(size) : "eax", "ebx", "ecx"
     );
 }
 
 static inline void iota_clear() {
     __asm__ volatile (
-        "int $0x80" 
-        : 
-        : "a"(4) 
-        : "memory"
+        "mov $4, %%eax\n"
+        "int $0x80"
+        : : : "eax"
     );
 }
 
-static inline int iota_strcmp(const char* str1, const char* str2) {
-    while (*str1 != '\0' && *str2 != '\0') {
-        if (*str1 != *str2) {
-            return 1; /* They don't match! */
-        }
-        str1++;
-        str2++;
-    }
-    /* If both reached the end at the same time, they match */
-    if (*str1 == '\0' && *str2 == '\0') {
-        return 0; 
-    }
-    return 1;
+static inline int iota_strcmp(const char* s1, const char* s2) {
+    while (*s1 && (*s1 == *s2)) { s1++; s2++; }
+    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
 }
 
 static inline uint32_t iota_strlen(const char* str) {
@@ -75,10 +96,4 @@ static inline uint32_t iota_strlen(const char* str) {
     return len;
 }
 
-static inline void iota_strcpy(char* dest, const char* src) {
-    while (*src) {
-        *dest++ = *src++;
-    }
-    *dest = '\0'; /* Null-terminate the destination string */
-}
 #endif

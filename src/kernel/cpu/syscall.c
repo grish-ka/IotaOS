@@ -1,14 +1,19 @@
-/* 
- * IotaOS - syscall.c
- * Copyright (c) 2026 grish-ka
- * Licensed under the MIT License.
- */
+/*
+* IotaOS - syscall.c
+* Copyright (c) 2026 grish-ka
+* Licensed under the MIT License.
+*/
 
 #include "cpu/isr.h"
 #include "drivers/stdio.h"
 #include "drivers/terminal.h"
 #include "drivers/system.h"
 #include "mem/pmm.h"
+#include "fs/tar.h"            /* Added for SYS_EXEC and SYS_LS */
+#include "drivers/ib_loader.h" /* Added for SYS_EXEC */
+
+/* We need to know where the ramdisk is in memory to load apps and list files */
+extern uint32_t global_initrd_address;
 
 void syscall_handler(registers_t *regs) {
     /* * Convention Reminder:
@@ -50,6 +55,30 @@ void syscall_handler(registers_t *regs) {
             // For now, just print a return message. 
             // Later this will kill the process.
             printf("\n[Process exited with code %d]\n", regs->ebx);
+            break;
+
+        case 7: /* SYS_EXEC */
+        {
+            char* filename = (char*)regs->ebx;
+            if (global_initrd_address == 0) {
+                printf("Error: No ramdisk loaded.\n");
+            } else {
+                void* file_data = tar_get_file(global_initrd_address, filename);
+                if (file_data == NULL) {
+                    printf("Error: File '%s' not found.\n", filename);
+                } else {
+                    ib_load_and_run(file_data);
+                }
+            }
+            break;
+        }
+
+        case 8: /* SYS_LS */
+            if (global_initrd_address == 0) {
+                printf("Error: No ramdisk loaded.\n");
+            } else {
+                tar_parse(global_initrd_address);
+            }
             break;
 
         default:
