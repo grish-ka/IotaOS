@@ -39,25 +39,27 @@ static inline void iota_ls() {
     __asm__ volatile ("mov $8, %%eax; int $0x80" ::: "eax");
 }
 
-static inline void iota_exec(const char* filename) {
+static inline int iota_exec(const char* filename) {
+    int return_code;
     __asm__ volatile (
-        "mov %0, %%ebx\n"
+        "mov %1, %%ebx\n"
         "mov $7, %%eax\n"
-        "int $0x80"
-        : : "r"(filename) : "eax", "ebx"
+        "int $0x80\n"
+        : "=a"(return_code) : "r"(filename) : "ebx"
     );
+    return return_code;
 }
 
 static inline void iota_reboot() {
     __asm__ volatile ("mov $2, %%eax; int $0x80" ::: "eax");
 }
 
+/* Updated to jump to your crt0.s stack restorer! */
 static inline void iota_exit(int exit_code) {
     __asm__ volatile (
-        "mov %0, %%ebx\n"    /* Put our exit_code into EBX */
-        "mov $6, %%eax\n"    /* SYS_EXIT */
-        "int $0x80"
-        : : "r"(exit_code) : "eax", "ebx"
+        "mov %0, %%ebx\n"
+        "jmp _iota_force_exit\n"
+        : : "r"(exit_code) : "ebx"
     );
 }
 

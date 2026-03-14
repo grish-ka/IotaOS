@@ -14,6 +14,7 @@
 
 /* We need to know where the ramdisk is in memory to load apps and list files */
 extern uint32_t global_initrd_address;
+int current_exit_code = 0; /* Global variable to store the exit code! */
 
 void syscall_handler(registers_t *regs) {
     /* * Convention Reminder:
@@ -52,9 +53,8 @@ void syscall_handler(registers_t *regs) {
             break;
 
         case 6: /* SYS_EXIT */
-            // For now, just print a return message. 
-            // Later this will kill the process.
-            printf("\n[Process exited with code %d]\n", regs->ebx);
+            current_exit_code = regs->ebx; /* Save it so ib_loader can grab it! */
+            printf("\n[Process exited with code %d]\n", current_exit_code);
             break;
 
         case 7: /* SYS_EXEC */

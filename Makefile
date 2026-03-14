@@ -7,6 +7,7 @@
 BUILD_DIR = ./build
 SRC_DIR = ./src
 APPS_DIR = $(SRC_DIR)/apps
+ADK_DIR = $(SRC_DIR)/IotaADK
 
 # Toolchain
 CC = i686-elf-gcc
@@ -38,34 +39,24 @@ $(BUILD_DIR)/IotaOS: $(ALL_OBJECTS)
 	@mkdir -p $(BUILD_DIR)
 	$(CC) -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/IotaOS -ffreestanding -O2 -nostdlib $(ALL_OBJECTS) -lgcc
 
-$(BUILD_DIR)/initrd_root/%.ib: $(APPS_DIR)/%.c $(APPS_DIR)/crt0.s $(APPS_DIR)/linker_app.ld
+# --- C APP BUILD ---
+$(BUILD_DIR)/initrd_root/%.ib: $(APPS_DIR)/%.c $(ADK_DIR)/lib/crt0.s $(ADK_DIR)/lib/linker.ld
 	@mkdir -p $(BUILD_DIR)/initrd_root
-	@echo "Hard-linking C App: $<"
-	# 1. Compile assembly
-	$(AS) $(APPS_DIR)/crt0.s -o $(BUILD_DIR)/crt0.o
-	# 2. Compile C (Notice we use -fno-asynchronous-unwind-tables to stop those 0x70 junk bytes)
-	$(CC) -c $< -o $(BUILD_DIR)/$*.o $(CFLAGS) -fno-asynchronous-unwind-tables
+	@echo "Building C App using ADK: $<"
 	
-	# Order is everything: crt0.o MUST be first
-	$(LD) -m elf_i386 -T $(APPS_DIR)/linker_app.ld -o $(BUILD_DIR)/$*.elf \
+	# 1. Compile ADK bootstrapper assembly
+	$(AS) $(ADK_DIR)/lib/crt0.s -o $(BUILD_DIR)/crt0.o
+	
+	# 2. Compile C (Notice the new -I$(ADK_DIR)/include flag!)
+	$(CC) -c $< -o $(BUILD_DIR)/$*.o $(CFLAGS) -I$(ADK_DIR)/include -fno-asynchronous-unwind-tables
+	
+	# 3. Link using ADK linker script
+	$(LD) -m elf_i386 -T $(ADK_DIR)/lib/linker.ld -o $(BUILD_DIR)/$*.elf \
 		$(BUILD_DIR)/crt0.o \
 		$(BUILD_DIR)/$*.o
 	
 	# 4. BINARY: Create the final file
 	$(OBJCOPY) -O binary $(BUILD_DIR)/$*.elf $@
-	
-	@python3 -c "import sys; f=open('$@', 'rb'); b=f.read(2); \
-	print('\033[32m[OK] Header Verified: $@\033[0m' if b == b'IB' else '\n\033[31m[BUILD ERROR] Magic Number Missing in $@! Found: ' + b.hex() + '\033[0m\n'); \
-	sys.exit(0 if b == b'IB' else 1)"
-
-# --- ASM APP BUILD ---
-$(BUILD_DIR)/initrd_root/%.ib: $(APPS_DIR)/%.s
-	@mkdir -p $(BUILD_DIR)/initrd_root
-	@echo "Assembling ASM App: $<"
-	$(AS) $< -o $(BUILD_DIR)/$*.o
-	$(LD) -m elf_i386 -Ttext 0 -o $(BUILD_DIR)/$*.elf $(BUILD_DIR)/$*.o
-	$(OBJCOPY) -O binary $(BUILD_DIR)/$*.elf $@
-	@rm -f $(BUILD_DIR)/$*.o $(BUILD_DIR)/$*.elf
 
 run: all
 	@mkdir -p $(BUILD_DIR)/iso/boot/grub

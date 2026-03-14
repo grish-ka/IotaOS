@@ -83,8 +83,8 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         pmm_mark_used(i);
     }
 
-    char* IOTAOS_VERSION = "0.1.1";
-    char* IOTAOS_KERNEL_VERSION = "0.1.1";
+    char* IOTAOS_VERSION = "0.1.2";
+    char* IOTAOS_KERNEL_VERSION = "0.1.2";
 
     terminal_writestring("Hello, kernel World!\n");
     terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n\n");
@@ -99,7 +99,14 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
 
     void* sh_file = tar_get_file(global_initrd_address, "iosh.ib");
     if (sh_file) {
-        ib_load_and_run(sh_file);
+        int exit_code = ib_load_and_run(sh_file);
+
+        if (exit_code != 0) {
+            char panic_msg[64];
+            sprintf(panic_msg, "The Shell crashed unexpectedly (exit code %d)!", exit_code);
+            panic(panic_msg);
+        }
+
     } else {
         panic("Critical Error: iosh.ib not found in ramdisk!");
     }

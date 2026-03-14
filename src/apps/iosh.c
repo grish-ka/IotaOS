@@ -19,8 +19,8 @@ void print_num(uint32_t num) {
     iota_print_str(&buf[i+1]);
 }
 
-void main() {
-    iota_print_str(IOTA_RELOC("\nWelcome to Iota Shell (IOSH) v0.1.0!\n"));
+int main() {
+    iota_print_str(IOTA_RELOC("\nWelcome to Iota Shell (IOSH) v0.1.1!\n"));
 
     volatile char cmd[256];
 
@@ -51,9 +51,9 @@ void main() {
             iota_exec(filename); /* Ask kernel to run it */
         }
         else if (iota_strcmp((char*)cmd, IOTA_RELOC("version")) == 0) {
-            iota_print_str(IOTA_RELOC("IotaOS Kernel Version: 0.1.1\n"));
-            iota_print_str(IOTA_RELOC("IotaOS Kernel Version: 0.1.1\n"));
-            iota_print_str(IOTA_RELOC("Iota Shell (IOSH) Version: 0.1.0\n"));
+            iota_print_str(IOTA_RELOC("IotaOS Version: 0.1.2\n"));
+            iota_print_str(IOTA_RELOC("IotaOS Kernel Version: 0.1.2\n"));
+            iota_print_str(IOTA_RELOC("Iota Shell (IOSH) Version: 0.1.1\n"));
             iota_print_str(IOTA_RELOC("Copyright (c) 2026 grish-ka. Licensed under MIT.\n"));
         }
         else if (iota_strcmp((char*)cmd, IOTA_RELOC("clear")) == 0) {
@@ -64,7 +64,7 @@ void main() {
             iota_reboot();
         }
         else if (iota_strcmp((char*)cmd, IOTA_RELOC("exit")) == 0) {
-            iota_exit(0); /* Exit with code 0 for success */
+            return 0;
         }
         else if (iota_strcmp((char*)cmd, IOTA_RELOC("bsod")) == 0) {
             __asm__ volatile("int $1");

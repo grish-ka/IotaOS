@@ -18,8 +18,27 @@ A simple OS made for fun
  - [x] Initrd
  - [x] `.ib` Loader
  - [x] Syscalls
- - [ ] Syscalls Extended
+ - [x] Syscalls Extended
+ - [ ] App Development Kit (ADK)
  - [ ] Full `stdio`
+
+# Make your own `.ib` file
+1. Download the ADK (App Development Kit) from the latest realese
+2. Create the `Makefile` for building your app
+```Make
+# Point this to wherever the ADK is installed on the computer!
+IOTA_ADK_PATH = ../IotaADK
+
+all: myapp.ib
+
+myapp.ib: main.c
+	# We just use the tools from the IOTA_ADK_PATH variable!
+	i686-elf-as $(IOTA_ADK_PATH)/lib/crt0.s -o crt0.o
+	i686-elf-gcc -c main.c -o myapp.o -I$(IOTA_ADK_PATH)/include -fno-asynchronous-unwind-tables
+	i686-elf-ld -T $(IOTA_ADK_PATH)/lib/linker.ld -o myapp.elf crt0.o myapp.o
+	i686-elf-objcopy -O binary myapp.elf myapp.ib
+```
+
 # Set Up GCC Cross Compiler
 
 > [!NOTE]

@@ -19,6 +19,6 @@ struct ib_header {
     uint32_t entry_point;   /* Usually 0 for now */
 } __attribute__((packed));
 
-void ib_load_and_run(void* file_data);
+int ib_load_and_run(void* file_data);
 
 #endif
