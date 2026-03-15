@@ -37,7 +37,7 @@ IotaOS is actively evolving\! Here is the current development roadmap for upcomi
 
  - [ ] **Phase 1: Architecture & Microkernel**  
    - [x] Implement Hardware Timer (PIT) interrupts.  
-   - [ ] Build a basic Task Scheduler for context switching.  
+   - [x] Build a basic Task Scheduler for context switching.  
    - [ ] Set up Paging (Virtual Memory) directory tables.  
    - [ ] Implement Ring 3 (User Mode) privilege switching.  
    - [ ] Write initial IPC (Inter-Process Communication) syscalls for message passing.  
