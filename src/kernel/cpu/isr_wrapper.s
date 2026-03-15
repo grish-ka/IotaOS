@@ -1,8 +1,8 @@
-/* 
- * IotaOS - isr_wrapper.s
- * Copyright (c) 2026 grish-ka
- * Licensed under the MIT License.
- */
+/*
+* IotaOS - isr_wrapper.s
+* Copyright (c) 2026 grish-ka
+* Licensed under the MIT License.
+*/
 
 .section .text
 .extern fault_handler
@@ -81,8 +81,16 @@ isr_common_stub:
 
 /* --- HARDWARE INTERRUPTS (IRQs) --- */
 
+.global irq0
 .global irq1
 .extern irq_handler
+
+/* IRQ 0 is the PIT Timer! It maps to IDT entry 32 */
+irq0:
+    cli
+    pushl $0        /* Dummy error code to keep the stack aligned */
+    pushl $32       /* IDT Entry 32 */
+    jmp irq_common_stub
 
 /* IRQ 1 is the Keyboard! It maps to IDT entry 33 */
 irq1:
@@ -114,6 +122,7 @@ irq128:
     popal             
     addl $8, %esp     
     iret
+
 /* The master tunnel for all hardware interrupts */
 irq_common_stub:
     pushal

@@ -1,8 +1,8 @@
-/* 
- * IotaOS - pic.c
- * Copyright (c) 2026 grish-ka
- * Licensed under the MIT License.
- */
+/*
+* IotaOS - pic.c
+* Copyright (c) 2026 grish-ka
+* Licensed under the MIT License.
+*/
 
 #include "drivers/io.h"
 
@@ -42,7 +42,8 @@ void pic_remap(void) {
     outb(PIC2_DATA, ICW4_8086);
 
     /* --- CHANGE THIS BOTTOM PART --- */
-    /* Mask all interrupts except IRQ 1 (Keyboard) */
-    outb(PIC1_DATA, 0xFD); /* 1111 1101 */
-    outb(PIC2_DATA, 0xFF); /* 1111 1111 */
+    /* Mask all interrupts except IRQ 0 (Timer) and IRQ 1 (Keyboard) */
+    /* 0xFC in binary is 1111 1100. This unmasks bit 0 and bit 1! */
+    outb(PIC1_DATA, 0xFC); 
+    outb(PIC2_DATA, 0xFF); 
 }

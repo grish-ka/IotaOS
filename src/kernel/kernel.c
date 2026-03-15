@@ -10,6 +10,7 @@
 #include "drivers/string.h"
 #include "drivers/system.h"
 #include "drivers/ib_loader.h"
+#include "drivers/timer.h"    /* <--- 1. ADD THIS! */
 #include "cpu/idt.h"
 #include "cpu/pic.h"
 #include "mem/pmm.h"
@@ -63,6 +64,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
     }
     pic_remap();
     idt_install();
+    timer_init(100);
     __asm__ volatile("sti");
 
     /* PMM Initialization (128MB RAM, Bitmap at 1MB) */
@@ -83,8 +85,8 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         pmm_mark_used(i);
     }
 
-    char* IOTAOS_VERSION = "0.1.2";
-    char* IOTAOS_KERNEL_VERSION = "0.1.2";
+    char* IOTAOS_VERSION = "0.1.3-rc.1";
+    char* IOTAOS_KERNEL_VERSION = IOTAOS_VERSION;
 
     terminal_writestring("Hello, kernel World!\n");
     terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n\n");

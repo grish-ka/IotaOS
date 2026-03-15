@@ -1,8 +1,8 @@
-/* 
- * IotaOS - isr.c
- * Copyright (c) 2026 grish-ka
- * Licensed under the MIT License.
- */
+/*
+* IotaOS - isr.c
+* Copyright (c) 2026 grish-ka
+* Licensed under the MIT License.
+*/
 
 #include "drivers/terminal.h"
 #include "drivers/io.h"
@@ -31,6 +31,7 @@ char *exception_messages[] = {
     "Coprocessor Fault",
     "Alignment Check",
     "Machine Check",
+    "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
     "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
     "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
     "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)",
@@ -91,9 +92,15 @@ void fault_handler(registers_t *regs) {
 
 /* We will write this in your keyboard.c next! */
 extern void keyboard_handle_interrupt(void);
+extern void timer_handler(void);
 
 /* This handles all hardware interrupts from the PIC */
 void irq_handler(registers_t *regs) {
+    /* If it is Interrupt 32 (IRQ 0), the timer caused it! */
+    if (regs->int_no == 32) {
+        timer_handler();
+    }
+
     /* If it is Interrupt 33 (IRQ 1), the keyboard caused it! */
     if (regs->int_no == 33) {
         keyboard_handle_interrupt();

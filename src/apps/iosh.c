@@ -51,8 +51,8 @@ int main() {
             iota_exec(filename); /* Ask kernel to run it */
         }
         else if (iota_strcmp((char*)cmd, IOTA_RELOC("version")) == 0) {
-            iota_print_str(IOTA_RELOC("IotaOS Version: 0.1.2\n"));
-            iota_print_str(IOTA_RELOC("IotaOS Kernel Version: 0.1.2\n"));
+            iota_print_str(IOTA_RELOC("IotaOS Version: 0.1.3-rc.1\n"));
+            iota_print_str(IOTA_RELOC("IotaOS Kernel Version: 0.1.3-rc.1\n"));
             iota_print_str(IOTA_RELOC("Iota Shell (IOSH) Version: 0.1.1\n"));
             iota_print_str(IOTA_RELOC("Copyright (c) 2026 grish-ka. Licensed under MIT.\n"));
         }

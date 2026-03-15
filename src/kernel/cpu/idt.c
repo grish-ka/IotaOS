@@ -1,8 +1,8 @@
-/* 
- * IotaOS - idt.c
- * Copyright (c) 2026 grish-ka
- * Licensed under the MIT License.
- */
+/*
+* IotaOS - idt.c
+* Copyright (c) 2026 grish-ka
+* Licensed under the MIT License.
+*/
 
 #include "idt.h"
 
@@ -10,6 +10,7 @@ struct idt_entry idt[256];
 struct idt_ptr idtp;
 
 /* Declare all IRQs */
+extern void irq0(void);
 extern void irq1(void);
 extern void irq128(void);
 
@@ -102,12 +103,14 @@ void idt_install(void) {
     idt_set_gate(30, (uint32_t)isr30, current_cs, 0x8E);
     idt_set_gate(31, (uint32_t)isr31, current_cs, 0x8E);
 
-    idt_set_gate(33, (uint32_t)irq1, current_cs, 0x8E);
-    /* 
-    * 0xEE (1110 1110) is the magic:
-    * The 'E' tells the CPU this is a 32-bit Interrupt Gate.
-    * The other 'E' sets the Privilege Level to 3 (Userland).
-    */
+    /* Hardware Interrupts */
+    idt_set_gate(32, (uint32_t)irq0, current_cs, 0x8E); /* Timer */
+    idt_set_gate(33, (uint32_t)irq1, current_cs, 0x8E); /* Keyboard */
+    
+    /* * 0xEE (1110 1110) is the magic:
+     * The 'E' tells the CPU this is a 32-bit Interrupt Gate.
+     * The other 'E' sets the Privilege Level to 3 (Userland).
+     */
     idt_set_gate(128, (uint32_t)irq128, current_cs, 0xEE);
 
     /* Load the IDT into the CPU */
