@@ -31,9 +31,34 @@ IotaOS is actively evolving\! Here is the current development roadmap for upcomi
 
 * **Standard C Library (libc):** Implement a minimal standard library (adding functions like malloc, free, printf, fopen) for the Iota ADK to make building apps even easier.
 
-**Current Phase:** Phase 1\!
+**Current Phase:** Phase 1\! 🚀
 
-# Make your own `.ib` file
+### **📝 Active Development Checklist**
+
+* [ ] **Phase 1: Architecture & Microkernel**  
+  * [ ] Implement Hardware Timer (PIT) interrupts.  
+  * [ ] Build a basic Task Scheduler for context switching.  
+  * [ ] Set up Paging (Virtual Memory) directory tables.  
+  * [ ] Implement Ring 3 (User Mode) privilege switching.  
+  * [ ] Write initial IPC (Inter-Process Communication) syscalls for message passing.  
+* [ ] **Phase 2: The Driver Ecosystem**  
+  * [ ] Implement IDE/ATA driver for disk reading and writing.  
+  * [ ] Write a read/write filesystem parser (e.g., FAT32 or ext2).  
+  * [ ] Move PS/2 Keyboard driver out of the kernel and into User Space.  
+  * [ ] Move VGA/Terminal driver out of the kernel and into User Space.  
+  * [ ] Draft initial networking/Web Driver interface.  
+* [ ] **Phase 3: Persistent Installation**  
+  * [ ] Create the standalone IotaOSInstaller.iso bootable image.  
+  * [ ] Write disk partitioning and formatting logic.  
+  * [ ] Implement file copying from the Live CD ramdisk to the physical hard drive.  
+  * [ ] Configure GRUB installation for the target drive.  
+* [ ] **Phase 4: ADK Expansion**  
+  * [ ] Port a minimal standard C library (libc headers like string.h, stdio.h).  
+  * [ ] Implement dynamic memory allocation (malloc, free) in user space.  
+  * [ ] Add file I/O wrappers (fopen, fread, fwrite, fclose).  
+  * [ ] Provide detailed developer documentation and comprehensive example apps.
+
+## Make your own `.ib` file
 1. Download the ADK (App Development Kit) from the latest realese
 2. Create the `Makefile` for building your app
 ```Make
@@ -50,7 +75,7 @@ myapp.ib: main.c
 	i686-elf-objcopy -O binary myapp.elf myapp.ib
 ```
 
-# Set Up GCC Cross Compiler
+## Set Up GCC Cross Compiler
 
 > [!NOTE]
 > I have tried this before and for me I have not needed `build-essential` so bewere you may need gcc and make installed
