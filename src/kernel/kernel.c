@@ -85,7 +85,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         pmm_mark_used(i);
     }
 
-    char* IOTAOS_VERSION = "0.1.3-rc.1";
+    char* IOTAOS_VERSION = "0.1.3";
     char* IOTAOS_KERNEL_VERSION = IOTAOS_VERSION;
 
     terminal_writestring("Hello, kernel World!\n");
