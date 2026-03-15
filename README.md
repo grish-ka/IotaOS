@@ -12,15 +12,29 @@ A simple OS made for fun
    - `.ib` Binarys for execution
  - Syscalls
 
-# Upcoming Features (Checklist)
- - [x] IDT (Interrupt Descriptor Table)
- - [x] PMM
- - [x] Initrd
- - [x] `.ib` Loader
- - [x] Syscalls
- - [x] Syscalls Extended
- - [ ] App Development Kit (ADK)
- - [ ] Full `stdio`
+## **🗺️ Roadmap**
+
+IotaOS is actively evolving\! Here is the current development roadmap for upcoming releases:
+
+### **🛠️ Phase 1: The Microkernel Shift (v0.2.x)**
+
+* **Architecture Overhaul:** Transition from a monolithic kernel to a lightweight, modular **Microkernel**.  
+* **IPC (Inter-Process Communication):** Build a secure message-passing system so user-space programs can safely talk to the kernel.  
+* **Virtual Memory:** Implement Paging to give every .ib application its own isolated, secure memory space.
+
+### **🔌 Phase 2: The Driver Ecosystem (v0.3.x)**
+
+* **User-Space Drivers:** Create a dedicated drivers/ folder to run hardware controllers safely in user-space (Ring 3\) instead of kernel space (Ring 0).  
+* **Storage & Filesystems:** Add IDE/ATA disk drivers and a read/write filesystem (like FAT32 or ext2) to replace the read-only ramdisk. Developers will be able to save files permanently\!  
+* **Web Driver:** Begin groundwork for a web driver to handle basic networking and interface logic.
+
+### **💿 Phase 3: Persistent Installation (v0.4.x)**
+
+* **IotaOSInstaller.iso:** Develop a standalone, bootable setup program that partitions a hard drive and installs IotaOS permanently to a machine, moving beyond the "Live CD" experience.
+
+### **📚 Phase 4: ADK Expansion**
+
+* **Standard C Library (libc):** Implement a minimal standard library (adding functions like malloc, free, printf, fopen) for the Iota ADK to make building apps even easier.
 
 # Make your own `.ib` file
 1. Download the ADK (App Development Kit) from the latest realese
