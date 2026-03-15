@@ -1,12 +1,11 @@
 /*
-* IotaOS - iosh.c
-* Copyright (c) 2026 grish-ka
-* Licensed under the MIT License.
-*/
+ * IotaOS - iosh.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
 
 #include "iota.h"
 
-/* Helper to print numbers since we don't have printf in app-space yet */
 void print_num(uint32_t num) {
     if (num == 0) { iota_print_str(IOTA_RELOC("0")); return; }
     char buf[16];
@@ -20,12 +19,11 @@ void print_num(uint32_t num) {
 }
 
 int main() {
-    iota_print_str(IOTA_RELOC("\nWelcome to Iota Shell (IOSH) v0.1.1!\n"));
+    iota_print_str(IOTA_RELOC("\nWelcome to Iota Shell (IOSH) v0.1.2!\n"));
 
     volatile char cmd[256];
 
     while (1) {
-        /* Zero the buffer */
         for(int i = 0; i < 256; i++) ((char*)cmd)[i] = 0;
 
         iota_print_str(IOTA_RELOC("user@IotaOS$ "));
@@ -35,7 +33,8 @@ int main() {
             iota_print_str(IOTA_RELOC("Available commands:\n"));
             iota_print_str(IOTA_RELOC("  help    - Show this help message\n"));
             iota_print_str(IOTA_RELOC("  ls      - List files in the ramdisk\n"));
-            iota_print_str(IOTA_RELOC("  run     - Execute an .ib file (e.g. './test.ib')\n"));
+            iota_print_str(IOTA_RELOC("  run     - Execute in foreground (e.g. './test.ib')\n"));
+            iota_print_str(IOTA_RELOC("  bg      - Execute in background (e.g. 'bg spinner.ib')\n"));
             iota_print_str(IOTA_RELOC("  meminfo - Show physical memory usage information\n"));
             iota_print_str(IOTA_RELOC("  version - Show the kernel and shell version\n"));
             iota_print_str(IOTA_RELOC("  clear   - Clear the terminal screen\n"));
@@ -43,24 +42,37 @@ int main() {
             iota_print_str(IOTA_RELOC("  exit    - Exit the shell and shutdown the system\n"));
         } 
         else if (iota_strcmp((char*)cmd, IOTA_RELOC("ls")) == 0) {
-            iota_ls(); /* Ask kernel to print the files */
+            iota_ls(); 
         }
         else if (cmd[0] == '.' && cmd[1] == '/') {
-            /* Extract filename after "./" */
             char* filename = (char*)&cmd[2]; 
-            iota_exec(filename); /* Ask kernel to run it */
+            int ret = iota_exec(filename); 
+            if (ret == -1) {
+                iota_print_str(IOTA_RELOC("IOSH Error: File not found in ramdisk.\n"));
+            }
+        }
+        else if (cmd[0] == 'b' && cmd[1] == 'g' && cmd[2] == ' ') {
+            char* filename = (char*)&cmd[3]; /* Grab filename after "bg " */
+            iota_print_str(IOTA_RELOC("Spawning background task...\n"));
+            int ret = iota_spawn(filename);
+            
+            /* If the syscall returns -1, something went wrong! */
+            if (ret == -1) {
+                iota_print_str(IOTA_RELOC("IOSH Error: Failed to spawn task.\n"));
+                iota_print_str(IOTA_RELOC("-> Did you forget the '.ib' extension? (e.g., 'bg spinner.ib')\n"));
+                iota_print_str(IOTA_RELOC("-> Did you run 'make clean && make run' to update the ramdisk?\n"));
+            }
         }
         else if (iota_strcmp((char*)cmd, IOTA_RELOC("version")) == 0) {
-            iota_print_str(IOTA_RELOC("IotaOS Version: 0.1.3\n"));
-            iota_print_str(IOTA_RELOC("IotaOS Kernel Version: 0.1.3\n"));
-            iota_print_str(IOTA_RELOC("Iota Shell (IOSH) Version: 0.1.1\n"));
-            iota_print_str(IOTA_RELOC("Copyright (c) 2026 grish-ka. Licensed under MIT.\n"));
+                        iota_print_str(IOTA_RELOC("IotaOS Version: 0.1.4\n"));
+                        iota_print_str(IOTA_RELOC("IotaOS Kernel Version: 0.1.4\n"));
+                        iota_print_str(IOTA_RELOC("Iota Shell (IOSH) Version: 0.1.2\n"));
+                        iota_print_str(IOTA_RELOC("Copyright (c) 2026 grish-ka. Licensed under MIT.\n"));       
         }
         else if (iota_strcmp((char*)cmd, IOTA_RELOC("clear")) == 0) {
             iota_clear();
         }
         else if (iota_strcmp((char*)cmd, IOTA_RELOC("reboot")) == 0) {
-            iota_print_str(IOTA_RELOC("Rebooting...\n"));
             iota_reboot();
         }
         else if (iota_strcmp((char*)cmd, IOTA_RELOC("exit")) == 0) {

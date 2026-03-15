@@ -1,14 +1,15 @@
-/* 
- * IotaOS - stdio.c
- * Copyright (c) 2026 grish-ka
- * Licensed under the MIT License.
- */
+/*
+* IotaOS - stdio.c
+* Copyright (c) 2026 grish-ka
+* Licensed under the MIT License.
+*/
 
 #include "stdio.h"
 #include "terminal.h" /* So printf can talk to the screen */
 #include <stdint.h>
 #include <stddef.h>
 #include "keyboard.h"
+#include "timer.h"    /* <--- ADD THIS TO FIX THE TIMER ERRORS */
 
 // TODO: Add scanf();
 
@@ -193,4 +194,21 @@ void gets(char* buffer, int max_size) {
     
     /* Always cap off strings with a null terminator! */
     buffer[count] = '\0'; 
+}
+
+/* Sleeps for the specified number of milliseconds */
+void sleep(uint32_t ms) {
+    /* At 100Hz, 1 tick = 10ms. So we divide ms by 10 to get ticks. */
+    uint32_t target_ticks = timer_get_ticks() + (ms / 10);
+    
+    /* If they ask for less than 10ms, wait at least 1 tick */
+    if (ms > 0 && ms < 10) {
+        target_ticks = timer_get_ticks() + 1;
+    }
+
+    while (timer_get_ticks() < target_ticks) {
+        /* Let the CPU halt until the next interrupt fires to save power! */
+        /* It will wake up every 10ms, check the time, and go back to sleep if needed. */
+        __asm__ volatile("hlt");
+    }
 }

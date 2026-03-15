@@ -92,13 +92,16 @@ void fault_handler(registers_t *regs) {
 
 /* We will write this in your keyboard.c next! */
 extern void keyboard_handle_interrupt(void);
-extern void timer_handler(void);
+extern uint32_t timer_handler(uint32_t esp); /* <--- Updated signature */
 
 /* This handles all hardware interrupts from the PIC */
-void irq_handler(registers_t *regs) {
+uint32_t irq_handler(uint32_t esp) {
+    /* Since ESP points perfectly to our pushed registers, we cast it! */
+    registers_t *regs = (registers_t*)esp;
+
     /* If it is Interrupt 32 (IRQ 0), the timer caused it! */
     if (regs->int_no == 32) {
-        timer_handler();
+        esp = timer_handler(esp); /* <--- Catch the task switch! */
     }
 
     /* If it is Interrupt 33 (IRQ 1), the keyboard caused it! */
@@ -112,4 +115,6 @@ void irq_handler(registers_t *regs) {
         outb(0xA0, 0x20); /* Send to Slave PIC too if necessary */
     }
     outb(0x20, 0x20);     /* Always send to Master PIC */
+
+    return esp; /* <--- Return the new (or old) stack pointer to assembly */
 }

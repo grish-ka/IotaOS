@@ -8,6 +8,7 @@
 #include "io.h"
 #include "stdio.h"
 #include "terminal.h"
+#include "../cpu/task.h" /* <--- Include the scheduler! */
 
 /* Keep track of how many times the system has ticked since boot */
 uint32_t tick = 0;
@@ -31,10 +32,14 @@ void timer_init(uint32_t frequency) {
 }
 
 /* This is called by your main IRQ handler in isr.c */
-void timer_handler(void) {
+uint32_t timer_handler(uint32_t esp) {
     tick++;
     
-    /* * In the future, this is EXACTLY where we will call our 
-     * Task Scheduler to switch running processes! 
-     */
+    /* Ask the scheduler what task to run next! */
+    return task_schedule(esp);
+}
+
+/* Allow other parts of the kernel to check the time */
+uint32_t timer_get_ticks(void) {
+    return tick;
 }

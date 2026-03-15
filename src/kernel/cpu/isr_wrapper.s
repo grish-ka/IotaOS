@@ -130,11 +130,18 @@ irq_common_stub:
     /* ADD THIS: Push a dummy zero to keep C registers_t aligned! */
     pushl $0
 
-    pushl %esp
-    call irq_handler  /* <--- Calls our new C function! */
-    addl $4, %esp     /* Clean up the pushed %esp */
+    /* Save the exact stack pointer (ESP) into EAX so we can pass it as an argument! */
+    movl %esp, %eax
+    pushl %eax
 
-    /* ADD THIS: Clean up the dummy zero we pushed! */
+    call irq_handler  /* C Function: Returns the ESP of the next task in EAX */
+    addl $4, %esp     /* Clean up the argument from the old stack */
+
+    /* ---> TASK SWITCH MAGIC! <--- */
+    /* Update the CPU stack pointer to wherever the new task is! */
+    movl %eax, %esp
+
+    /* Clean up the dummy zero on the NEW stack! */
     addl $4, %esp
 
     popal

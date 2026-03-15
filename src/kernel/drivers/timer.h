@@ -13,6 +13,9 @@
 void timer_init(uint32_t frequency);
 
 /* The function that runs every time the timer ticks */
-void timer_handler(void);
+uint32_t timer_handler(uint32_t esp); /* <--- Return type changed to uint32_t */
+
+/* Get current tick count */
+uint32_t timer_get_ticks(void);
 
 #endif /* TIMER_H */

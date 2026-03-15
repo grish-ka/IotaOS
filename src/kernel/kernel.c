@@ -1,8 +1,8 @@
-/* 
- * IotaOS - kernel.c
- * Copyright (c) 2026 grish-ka
- * Licensed under the MIT License.
- */
+/*
+* IotaOS - kernel.c
+* Copyright (c) 2026 grish-ka
+* Licensed under the MIT License.
+*/
 
 #include "drivers/terminal.h"
 #include "drivers/stdio.h"
@@ -10,22 +10,13 @@
 #include "drivers/string.h"
 #include "drivers/system.h"
 #include "drivers/ib_loader.h"
-#include "drivers/timer.h"    /* <--- 1. ADD THIS! */
+#include "drivers/timer.h"    
 #include "cpu/idt.h"
 #include "cpu/pic.h"
+#include "cpu/task.h"         /* <--- Add Task header! */
 #include "mem/pmm.h"
 #include "multiboot.h"
 #include "fs/tar.h"
-
-/* Check if the compiler thinks you are targeting the wrong operating system. */
-#if defined(__linux__)
-#error "You are not using a cross-compiler, you will most certainly run into trouble"
-#endif
-
-/* This tutorial will only work for the 32-bit ix86 targets. */
-#if !defined(__i386__)
-#error "This project needs to be compiled with a ix86-elf compiler"
-#endif
 
 /* Global variable to store where the ramdisk is in memory so the shell can use it */
 uint32_t global_initrd_address = 0;
@@ -49,10 +40,8 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
             multiboot_module_t* module = (multiboot_module_t*)mb_info->mods_addr;
             global_initrd_address = module->mod_start;
 
-            // Protect the ramdisk so the PMM doesn't give this memory away!
-            for (uint32_t addr = module->mod_start; addr < module->mod_end; addr += PAGE_SIZE) {
-                pmm_mark_used(addr);
-            }
+            /* PMM is not initialized yet here, but we save the address to protect later! */
+            // We'll protect the ramdisk memory AFTER PMM init.
             
             // printf("Success! Ramdisk found at 0x%x\n", global_initrd_address);
             tar_parse(global_initrd_address);
@@ -64,10 +53,8 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
     }
     pic_remap();
     idt_install();
-    timer_init(100);
-    __asm__ volatile("sti");
-
-    /* PMM Initialization (128MB RAM, Bitmap at 1MB) */
+    
+    /* 1. PMM Initialization (128MB RAM, Bitmap at 1MB) MUST happen first! */
     pmm_init(128 * 1024 * 1024, 0x100000); 
 
     /* Mark the first 4MB as used (BIOS, VGA, Kernel, and the Bitmap) */
@@ -84,9 +71,24 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
     for(uint32_t i = 0; i < 0x100000; i += PAGE_SIZE) {
         pmm_mark_used(i);
     }
+    
+    /* Protect the ramdisk NOW that PMM is ready! */
+    if (global_initrd_address != 0 && magic == MULTIBOOT_BOOTLOADER_MAGIC) {
+        multiboot_info_t* mb_info = (multiboot_info_t*)multiboot_info_addr;
+        multiboot_module_t* module = (multiboot_module_t*)mb_info->mods_addr;
+        for (uint32_t addr = module->mod_start; addr < module->mod_end; addr += PAGE_SIZE) {
+            pmm_mark_used(addr);
+        }
+    }
 
-    char* IOTAOS_VERSION = "0.1.3";
-    char* IOTAOS_KERNEL_VERSION = IOTAOS_VERSION;
+    /* 2. NOW we can safely Initialize the Scheduler and spawn the background task! */
+    task_init();
+    
+    /* 3. Start the timer and enable interrupts */
+    timer_init(100);
+    __asm__ volatile("sti");
+
+    char* IOTAOS_KERNEL_VERSION = "0.1.4";
 
     terminal_writestring("Hello, kernel World!\n");
     terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n\n");
