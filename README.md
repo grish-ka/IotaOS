@@ -58,6 +58,8 @@ IotaOS is actively evolving\! Here is the current development roadmap for upcomi
    - [ ] Add file I/O wrappers (fopen, fread, fwrite, fclose).  
    - [ ] Provide detailed developer documentation and comprehensive example apps.
 
+This is slowly being converted to `TODO.json` for [go-check](https://github.com/grish-ka/go-check) as we are using it so [go-check](https://github.com/grish-ka/go-check) will be getting updates
+
 ## Make your own `.ib` file
 1. Download the ADK (App Development Kit) from the latest realese
 2. Create the `Makefile` for building your app
@@ -78,16 +80,40 @@ myapp.ib: main.c
 ## Set Up GCC Cross Compiler
 
 > [!NOTE]
-> I have tried this before and for me I have not needed `build-essential` so bewere you may need gcc and make installed
+> I have tried this before and for me I have not needed `build-essential` so beware you may need gcc and make installed
 
-1. Install Build Dependencies
+> [!NOTE]
+> I have tried this before and for me I have not needed build-essential (on Ubuntu) or @development-tools (on Fedora), so beware you may need gcc, g++, and make installed if they aren't already.
+
+### **1\. Install Build Dependencies**
+
+Choose your specific Linux distribution below to see the required commands:
+
+<details>
+
+<summary><b>🐧 Ubuntu / Debian</b> (Click to expand)</summary>
+
 ```bash
-sudo apt update
+sudo apt update  
 sudo apt install bison flex libgmp3-dev libmpc-dev libmpfr-dev libisl-dev xorriso grub-pc-bin 
 
-# For Texinfo (optional)
+# For Texinfo (optional)  
 sudo apt install libncurses5-dev libncursesw5-dev
 ```
+</details>
+
+<details>
+
+<summary><b>🎩 Fedora</b> (Click to expand)</summary>
+
+```bash
+sudo dnf install bison flex gmp-devel libmpc-devel mpfr-devel isl-devel xorriso grub2-pc-modules grub2-tools-extra
+```
+
+# For Texinfo (optional)  
+sudo dnf install ncurses-devel
+
+</details>
 2. Install Legacy Texinfo (Optional)
 
 > [!CAUTION]
