@@ -90,6 +90,13 @@ Choose your specific Linux distribution below to see the required commands:
 
 <summary><b>🐧 Ubuntu / Debian</b> (Click to expand)</summary>
 
+> [!IMPORTANT]
+> If you have Ubuntu at a bare minimum installed then you need to run this or install build essantials
+```bash
+# This ensures you have awk, sed, make, and gcc
+sudo apt install build-essentials
+```
+
 ```bash
 sudo apt update  
 sudo apt install bison flex libgmp3-dev libmpc-dev libmpfr-dev libisl-dev xorriso grub-pc-bin 
@@ -102,6 +109,13 @@ sudo apt install libncurses5-dev libncursesw5-dev
 <details>
 
 <summary><b>🎩 Fedora</b> (Click to expand)</summary>
+
+> [!IMPORTANT]
+> If you have Fedora at a bare minimum installed then you need to run this or install build essantials
+```bash
+# This group ensures you have awk, sed, make, and gcc
+sudo dnf groupinstall "Development Tools"
+```
 
 ```bash
 sudo dnf install bison flex gmp-devel libmpc-devel mpfr-devel isl-devel xorriso grub2-pc-modules grub2-tools-extra
