@@ -80,9 +80,6 @@ myapp.ib: main.c
 ## Set Up GCC Cross Compiler
 
 > [!NOTE]
-> I have tried this before and for me I have not needed `build-essential` so beware you may need gcc and make installed
-
-> [!NOTE]
 > I have tried this before and for me I have not needed build-essential (on Ubuntu) or @development-tools (on Fedora), so beware you may need gcc, g++, and make installed if they aren't already.
 
 ### **1\. Install Build Dependencies**
