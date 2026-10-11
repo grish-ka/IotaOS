@@ -55,12 +55,29 @@ void syscall_handler(registers_t *regs) {
             char* filename = (char*)regs->ebx;
             if (global_initrd_address == 0) {
                 printf("Error: No ramdisk loaded.\n");
+                regs->eax = -1;
             } else {
                 void* file_data = tar_get_file(global_initrd_address, filename);
                 if (file_data == NULL) {
                     printf("Error: File '%s' not found.\n", filename);
+                    regs->eax = -1;
                 } else {
-                    ib_load_and_run(file_data);
+                    struct ib_header* header = (struct ib_header*)file_data;
+                    if (header->magic == IB_MAGIC) {
+                        /* Check for Auto-Background Flag! */
+                        if (header->flags & 1) {
+                            uint32_t code_ptr = (uint32_t)file_data + header->code_offset;
+                            create_task((void (*)())code_ptr);
+                            regs->eax = 0; 
+                        } else {
+                            /* Normal Foreground App */
+                            ib_load_and_run(file_data);
+                            regs->eax = current_exit_code;
+                        }
+                    } else {
+                        printf("Error: Invalid Magic!\n");
+                        regs->eax = -1;
+                    }
                 }
             }
             break;

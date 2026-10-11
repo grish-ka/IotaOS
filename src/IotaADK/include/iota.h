@@ -1,14 +1,19 @@
 /*
-* IotaOS - iota.h
-* Copyright (c) 2026 grish-ka
-* Licensed under the MIT License.
-*/
+ * IotaOS ADK - iota.h
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
 
 #ifndef IOTA_H
 #define IOTA_H
 
 #include <stdint.h>
 
+/* Put this anywhere in your C file to tell the kernel to run it in the background! */
+#define IOTA_AUTO_BACKGROUND __asm__(".global __iota_app_flags\n.set __iota_app_flags, 1\n");
+
+/* IOTA_RELOC dynamically calculates physical load addresses at runtime.
+ * Mandatory for all static strings and global variables! */
 #define IOTA_RELOC(ptr) ({ \
     uintptr_t __base; \
     __asm__ volatile ( \
@@ -56,8 +61,9 @@ static inline void iota_reboot() {
 static inline void iota_exit(int exit_code) {
     __asm__ volatile (
         "mov %0, %%ebx\n"
-        "jmp _iota_force_exit\n"
-        : : "r"(exit_code) : "ebx"
+        "mov $6, %%eax\n"
+        "int $0x80"
+        : : "r"(exit_code) : "eax", "ebx"
     );
 }
 
@@ -101,7 +107,7 @@ static inline uint32_t iota_strlen(const char* str) {
     return len;
 }
 
-/* --- NEW TASK MANAGEMENT SYSCALLS --- */
+/* --- TASK MANAGEMENT SYSCALLS --- */
 
 static inline void iota_sleep(uint32_t ms) {
     __asm__ volatile (

@@ -1,9 +1,10 @@
-/*
-* IotaOS - kernel.c
-* Copyright (c) 2026 grish-ka
-* Licensed under the MIT License.
-*/
+/* 
+ * IotaOS - kernel.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
 
+#include <stdint.h>
 #include "drivers/terminal.h"
 #include "drivers/stdio.h"
 #include "drivers/keyboard.h"
@@ -13,37 +14,46 @@
 #include "drivers/timer.h"    
 #include "cpu/idt.h"
 #include "cpu/pic.h"
-#include "cpu/task.h"         /* <--- Add Task header! */
+#include "cpu/task.h"
 #include "mem/pmm.h"
 #include "multiboot.h"
 #include "fs/tar.h"
 
-/* Global variable to store where the ramdisk is in memory so the shell can use it */
 uint32_t global_initrd_address = 0;
 
 void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
 {
-    /* Initialize terminal interface */
     terminal_initialize();
+    init_serial();
+    serial_printf("\n\n=== IOTAOS KERNEL DEBUG SYSTEM STARTED ===\n");
 
-    /* --- DEBUG MULTIBOOT PARSING --- */
-    // printf("Multiboot Check: Magic=0x%x, Addr=0x%x\n", magic, multiboot_info_addr);
+    uint32_t bitmap_loc = 0x200000; /* Fallback to the 2MB mark */
+    uint32_t total_memory = 256 * 1024 * 1024; /* Fallback to 256MB */
 
     if (magic == MULTIBOOT_BOOTLOADER_MAGIC) {
         multiboot_info_t* mb_info = (multiboot_info_t*)multiboot_info_addr;
         
-        // printf("Multiboot Flags: 0x%x, Modules: %d\n", mb_info->flags, mb_info->mods_count);
+        /* Bit 0 of flags tells us if mem_upper and mem_lower are valid */
+        if (mb_info->flags & 1) {
+            /* mem_upper and mem_lower are provided in Kilobytes. 
+               We add 1024 KB to account for the 1MB gap between them. */
+            uint32_t total_kb = mb_info->mem_lower + mb_info->mem_upper + 1024;
+            
+            /* Prevent the 32-bit overflow if you give QEMU 4GB or more! */
+            if (total_kb >= 4194304) {
+                total_memory = 0xFFFFFFFF; /* Cap at exactly 4GB - 1 byte */
+            } else {
+                total_memory = total_kb * 1024;
+            }
+        }
 
-        /* Bit 3 is 0x8. Let's check if it's set. */
         if (mb_info->mods_count > 0) {
-            /* inside kernel_main, after finding the module */
             multiboot_module_t* module = (multiboot_module_t*)mb_info->mods_addr;
             global_initrd_address = module->mod_start;
-
-            /* PMM is not initialized yet here, but we save the address to protect later! */
-            // We'll protect the ramdisk memory AFTER PMM init.
             
-            // printf("Success! Ramdisk found at 0x%x\n", global_initrd_address);
+            /* Dynamically place the PMM bitmap safely AFTER the ramdisk */
+            bitmap_loc = (module->mod_end + 4095) & ~4095;
+            
             tar_parse(global_initrd_address);
         } else {
             panic("Error: GRUB reports 0 modules loaded.\n");
@@ -51,44 +61,32 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
     } else {
         panic("Error: Magic number mismatch! Check boot.s pushes.\n");
     }
+    
     pic_remap();
     idt_install();
     
-    /* 1. PMM Initialization (128MB RAM, Bitmap at 1MB) MUST happen first! */
-    pmm_init(128 * 1024 * 1024, 0x100000); 
+    /* 1. PMM Initialization - using the dynamically detected RAM size! */
+    pmm_init(total_memory, bitmap_loc); 
 
-    /* Mark the first 4MB as used (BIOS, VGA, Kernel, and the Bitmap) */
-    for (uint32_t i = 0; i < 0x400000; i += PAGE_SIZE) {
+    /* Mark the first 4MB as used (Protects BIOS, VGA, Kernel, Ramdisk, and Bitmap) */
+    for (uint32_t i = 0; i < 0x400000; i += 4096) {
         pmm_mark_used(i);
     }
 
-    /* Mark the rest of the 128MB as FREE */
-    for (uint32_t i = 0x400000; i < 128 * 1024 * 1024; i += PAGE_SIZE) {
+    /* Mark the rest of the detected RAM as FREE. 
+       (We use a bitwise mask to ensure we don't accidentally exceed the memory limit) */
+    for (uint32_t i = 0x400000; i < (total_memory & ~4095); i += 4096) {
         pmm_mark_free(i);
     }
 
-    /* Double check marking the first 1MB as used */
-    for(uint32_t i = 0; i < 0x100000; i += PAGE_SIZE) {
-        pmm_mark_used(i);
-    }
-    
-    /* Protect the ramdisk NOW that PMM is ready! */
-    if (global_initrd_address != 0 && magic == MULTIBOOT_BOOTLOADER_MAGIC) {
-        multiboot_info_t* mb_info = (multiboot_info_t*)multiboot_info_addr;
-        multiboot_module_t* module = (multiboot_module_t*)mb_info->mods_addr;
-        for (uint32_t addr = module->mod_start; addr < module->mod_end; addr += PAGE_SIZE) {
-            pmm_mark_used(addr);
-        }
-    }
-
-    /* 2. NOW we can safely Initialize the Scheduler and spawn the background task! */
+    /* 2. Initialize the Scheduler and spawn the background task */
     task_init();
     
     /* 3. Start the timer and enable interrupts */
     timer_init(100);
     __asm__ volatile("sti");
 
-    char* IOTAOS_KERNEL_VERSION = "0.1.4";
+    char* IOTAOS_KERNEL_VERSION = "0.1.5";
 
     terminal_writestring("Hello, kernel World!\n");
     terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n\n");
@@ -117,8 +115,6 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
 
     shutdown();
 
-    /* The shell should never return to this point. This is an archive of iosh in kernel v0.1.0-beta.24 ever since version v0.1.0-beta.3*/
-
     printf("Welcome to IotaOS Shell (IOSH)!\n");
 
     while (1) {
@@ -145,7 +141,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
             }
         }
         else if (cmd[0] == '.' && cmd[1] == '/') {
-            char* filename = &cmd[2]; /* Extract filename after "run " */
+            char* filename = &cmd[2];
             
             if (global_initrd_address == 0) {
                 printf("Error: No ramdisk loaded.\n");
@@ -173,7 +169,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
             shutdown();
         }
         else if (strcmp(cmd, "bsod") == 0) {
-            __asm__ volatile("int $1"); /* Trigger a debug fault for testing the BSOD */
+            __asm__ volatile("int $1");
         }
         else if (strcmp(cmd, "meminfo") == 0) {
             uint32_t free = pmm_get_free_block_count();

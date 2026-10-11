@@ -17,6 +17,7 @@ struct ib_header {
     uint32_t code_offset;   /* Bytes from start of file to actual code */
     uint32_t code_size;     /* Size of the code */
     uint32_t entry_point;   /* Usually 0 for now */
+    uint32_t flags;         /* NEW! Bit 0: 1 = Auto-Background */
 } __attribute__((packed));
 
 int ib_load_and_run(void* file_data);
