@@ -1,15 +1,26 @@
 #include "stdio.h"
-#include "iota.h" 
+#include "iota.h"
+#include "string.h"
 
 static int int_to_string(int num, int base, char* buffer) {
-    if (num == 0) { buffer[0] = '0'; buffer[1] = '\0'; return 1; }
+    if (num == 0) {
+        buffer[0] = '0';
+        buffer[1] = '\0';
+        return 1;
+    }
     int is_negative = 0;
     unsigned int unum = num;
-    if (num < 0 && base == 10) { is_negative = 1; unum = (unsigned int)(-num); }
+    if (num < 0 && base == 10) {
+        is_negative = 1;
+        unum = (unsigned int)(-num);
+    }
     const char digits[] = "0123456789abcdef";
     char temp[32];
     int temp_i = 0;
-    while (unum > 0) { temp[temp_i++] = digits[unum % base]; unum /= base; }
+    while (unum > 0) {
+        temp[temp_i++] = digits[unum % base];
+        unum /= base;
+    }
     if (is_negative) temp[temp_i++] = '-';
     int count = 0;
     while (temp_i > 0) buffer[count++] = temp[--temp_i];
@@ -17,9 +28,18 @@ static int int_to_string(int num, int base, char* buffer) {
     return count;
 }
 
-void puts(const char* str) { iota_print_str(str); iota_print_str("\n"); }
-void putchar(char c) { char buf[2] = {c, '\0'}; iota_print_str(buf); }
-void gets(char* buffer, int max_size) { iota_get_line(buffer, max_size); }
+void putchar(char c) {
+    iota_write(1, &c, 1);
+}
+
+void puts(const char* str) {
+    iota_write(1, str, strlen(str));
+    iota_write(1, "\n", 1);
+}
+
+void gets(char* buffer, int max_size) {
+    iota_read(0, buffer, max_size);
+}
 
 void printf(const char* format, ...) {
     va_list args;
@@ -27,16 +47,20 @@ void printf(const char* format, ...) {
     while (*format != '\0') {
         if (*format == '%') {
             format++;
-            if (*format == 's') iota_print_str(va_arg(args, char*));
-            else if (*format == 'd') {
+            if (*format == 's') {
+                const char* str = va_arg(args, char*);
+                iota_write(1, str, strlen(str));
+            } else if (*format == 'd') {
                 char buf[32];
-                int_to_string(va_arg(args, int), 10, buf);
-                iota_print_str(buf);
+                int len = int_to_string(va_arg(args, int), 10, buf);
+                iota_write(1, buf, len);
             } else if (*format == 'x') {
                 char buf[32];
-                int_to_string(va_arg(args, int), 16, buf);
-                iota_print_str(buf);
-            } else if (*format == 'c') putchar((char)va_arg(args, int));
+                int len = int_to_string(va_arg(args, int), 16, buf);
+                iota_write(1, buf, len);
+            } else if (*format == 'c') {
+                putchar((char)va_arg(args, int));
+            }
         } else {
             putchar(*format);
         }

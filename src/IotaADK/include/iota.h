@@ -24,9 +24,16 @@
 
 /* --- Syscall Wrappers --- */
 
-static inline void iota_print_str(const char* str) {
-    /* We map 'str' to the "c" (ecx) register to match your kernel's SYS_PRINT */
-    __asm__ volatile ("int $0x80" : : "a"(1), "c"(str) : "memory");
+static inline int iota_read(int fd, void* buf, uint32_t count) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(3), "b"(fd), "c"(buf), "d"(count) : "memory");
+    return ret;
+}
+
+static inline int iota_write(int fd, const void* buf, uint32_t count) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(4), "b"(fd), "c"(buf), "d"(count) : "memory");
+    return ret;
 }
 
 static inline void iota_ls() {
@@ -54,23 +61,8 @@ static inline void iota_meminfo(uint32_t* free, uint32_t* total) {
     if(total) *total = t;
 }
 
-static inline void iota_get_line(char* buf, int size) {
-    __asm__ volatile ("int $0x80" : : "a"(3), "b"(buf), "c"(size) : "memory");
-}
-
 static inline void iota_clear() {
-    __asm__ volatile ("int $0x80" : : "a"(4) : "memory");
-}
-
-static inline int iota_strcmp(const char* s1, const char* s2) {
-    while (*s1 && (*s1 == *s2)) { s1++; s2++; }
-    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
-}
-
-static inline uint32_t iota_strlen(const char* str) {
-    uint32_t len = 0;
-    while (str[len]) len++;
-    return len;
+    __asm__ volatile ("int $0x80" : : "a"(14) : "memory");
 }
 
 /* --- TASK MANAGEMENT SYSCALLS --- */
@@ -96,6 +88,12 @@ static inline void iota_putchar_at(char c, uint8_t color, uint32_t x, uint32_t y
 
 static inline void iota_stress_ram(uint32_t mode, uint32_t mb) {
     __asm__ volatile ("int $0x80" : : "a"(13), "b"(mode), "c"(mb) : "memory");
+}
+
+static inline void* iota_sbrk(int increment) {
+    void* ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(15), "b"(increment) : "memory");
+    return ret;
 }
 
 #endif

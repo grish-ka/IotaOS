@@ -39,7 +39,7 @@ IotaOS is actively evolving\! Here is the current development roadmap for upcomi
    - [x] Implement Hardware Timer (PIT) interrupts.  
    - [x] Build a basic Task Scheduler for context switching.  
    - [x] Set up Paging (Virtual Memory) directory tables.  
-   - [ ] Do some of Phase 4 libc so we can get GNU
+   - [x] Do some of Phase 4 libc so we can get GNU
    - [ ] Implement Ring 3 (User Mode) privilege switching.  
    - [ ] Write initial IPC (Inter-Process Communication) syscalls for message passing.  
  - [ ] **Phase 2: The Driver Ecosystem**  
@@ -54,7 +54,7 @@ IotaOS is actively evolving\! Here is the current development roadmap for upcomi
    - [ ] Implement file copying from the Live CD ramdisk to the physical hard drive.  
    - [ ] Configure GRUB installation for the target drive.  
  - [ ] **Phase 4: ADK Expansion**  
-   - [ ] Port a minimal standard C library (libc headers like string.h, stdio.h).  
+   - [x] Port a minimal standard C library (libc headers like string.h, stdio.h).  
    - [ ] Implement dynamic memory allocation (malloc, free) in user space.  
    - [ ] Add file I/O wrappers (fopen, fread, fwrite, fclose).  
    - [ ] Provide detailed developer documentation and comprehensive example apps.

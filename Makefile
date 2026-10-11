@@ -30,7 +30,7 @@ ALL_APP_FILES = $(wildcard $(APPS_DIR)/*.s) $(wildcard $(APPS_DIR)/*.c)
 APP_SOURCES = $(filter-out $(APPS_DIR)/crt0.s, $(ALL_APP_FILES))
 
 LIBC_DIR = src/IotaADK/libc
-LIBC_SOURCES = $(LIBC_DIR)/src/stdio.c $(LIBC_DIR)/src/string.c
+LIBC_SOURCES = $(wildcard $(LIBC_DIR)/src/*.c)
 LIBC_OBJECTS = $(patsubst $(LIBC_DIR)/src/%.c, $(BUILD_DIR)/libc_%.o, $(LIBC_SOURCES))
 
 # CHANGED: Output .elf extensions instead of .ib
@@ -82,7 +82,7 @@ debug: all
 	cd $(BUILD_DIR)/initrd_root && tar --format=ustar -cf ../iso/boot/initrd.img *
 	cp grub.cfg $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	grub-mkrescue -o $(BUILD_DIR)/IotaOS.iso $(BUILD_DIR)/iso
-	qemu-system-i386 -m 8192M -cdrom $(BUILD_DIR)/IotaOS.iso -serial stdio
+	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -serial stdio
 
 sync:
 	@chmod +x tools/sync_tasks.sh
