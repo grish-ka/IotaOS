@@ -13,6 +13,7 @@ ADK_DIR = $(SRC_DIR)/IotaADK
 CC = i686-elf-gcc
 AS = i686-elf-as
 LD = i686-elf-ld
+AR = i686-elf-ar
 # Flags
 CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -fno-pie -fno-pic -I$(SRC_DIR)/kernel
 
@@ -28,25 +29,41 @@ ALL_OBJECTS = $(ASM_OBJECTS) $(C_OBJECTS)
 ALL_APP_FILES = $(wildcard $(APPS_DIR)/*.s) $(wildcard $(APPS_DIR)/*.c)
 APP_SOURCES = $(filter-out $(APPS_DIR)/crt0.s, $(ALL_APP_FILES))
 
+LIBC_DIR = src/IotaADK/libc
+LIBC_SOURCES = $(LIBC_DIR)/src/stdio.c $(LIBC_DIR)/src/string.c
+LIBC_OBJECTS = $(patsubst $(LIBC_DIR)/src/%.c, $(BUILD_DIR)/libc_%.o, $(LIBC_SOURCES))
+
 # CHANGED: Output .elf extensions instead of .ib
 APP_BINARIES = $(patsubst $(APPS_DIR)/%.s, $(BUILD_DIR)/initrd_root/%.elf, \
 		$(patsubst $(APPS_DIR)/%.c, $(BUILD_DIR)/initrd_root/%.elf, $(APP_SOURCES)))
 
-all: $(BUILD_DIR)/IotaOS $(APP_BINARIES)
+all: $(BUILD_DIR)/IotaOS $(BUILD_DIR)/libc.a $(APP_BINARIES)
 
 # --- KERNEL BUILD ---
 $(BUILD_DIR)/IotaOS: $(ALL_OBJECTS)
 	@mkdir -p $(BUILD_DIR)
 	$(CC) -T $(SRC_DIR)/linker.ld -o $(BUILD_DIR)/IotaOS -ffreestanding -O2 -nostdlib $(ALL_OBJECTS) -lgcc
 
+
+# --- LIBC BUILD ---
+
+$(BUILD_DIR)/libc.a: $(LIBC_OBJECTS)
+	@mkdir -p $(BUILD_DIR)
+	@echo "Archiving libc.a..."
+	$(AR) rcs $@ $^
+
+$(BUILD_DIR)/libc_%.o: $(LIBC_DIR)/src/%.c
+	@mkdir -p $(BUILD_DIR)
+	$(CC) -c $< -o $@ $(CFLAGS) -I$(LIBC_DIR)/include -Isrc/IotaADK/include
+
 # --- C APP BUILD ---
 # CHANGED: Target .elf and link directly into the ramdisk directory
-$(BUILD_DIR)/initrd_root/%.elf: $(APPS_DIR)/%.c $(ADK_DIR)/lib/crt0.s $(ADK_DIR)/lib/linker.ld
+$(BUILD_DIR)/initrd_root/%.elf: $(APPS_DIR)/%.c $(ADK_DIR)/lib/crt0.s $(ADK_DIR)/lib/linker.ld $(BUILD_DIR)/libc.a
 	@mkdir -p $(BUILD_DIR)/initrd_root
 	@echo "Building C App using ADK: $<"
 	$(AS) $(ADK_DIR)/lib/crt0.s -o $(BUILD_DIR)/crt0.o
-	$(CC) -c $< -o $(BUILD_DIR)/$*.o $(CFLAGS) -I$(ADK_DIR)/include -fno-asynchronous-unwind-tables
-	$(LD) -m elf_i386 -T $(ADK_DIR)/lib/linker.ld -o $@ $(BUILD_DIR)/crt0.o $(BUILD_DIR)/$*.o
+	$(CC) -c $< -o $(BUILD_DIR)/$*.o $(CFLAGS) -I$(ADK_DIR)/include -I$(LIBC_DIR)/include -fno-asynchronous-unwind-tables
+	$(LD) -m elf_i386 -T $(ADK_DIR)/lib/linker.ld -o $@ $(BUILD_DIR)/crt0.o $(BUILD_DIR)/$*.o -L$(BUILD_DIR) -lc
 run: all
 	@mkdir -p $(BUILD_DIR)/iso/boot/grub
 	@mkdir -p $(BUILD_DIR)/initrd_root

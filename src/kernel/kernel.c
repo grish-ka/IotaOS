@@ -87,7 +87,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
     timer_init(100);
     __asm__ volatile("sti");
 
-    char* IOTAOS_KERNEL_VERSION = "0.1.6";
+    char* IOTAOS_KERNEL_VERSION = "0.1.7";
 
     terminal_writestring("Hello, kernel World!\n");
     terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n\n");

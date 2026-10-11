@@ -25,72 +25,41 @@
 /* --- Syscall Wrappers --- */
 
 static inline void iota_print_str(const char* str) {
-    uint32_t len = 0;
-    while (str[len]) len++;
-    __asm__ volatile (
-        "mov %0, %%ecx\n"
-        "mov $1, %%eax\n"
-        "mov $1, %%ebx\n"
-        "int $0x80"
-        : : "r"(str), "r"(len) : "eax", "ebx", "ecx"
-    );
+    /* We map 'str' to the "c" (ecx) register to match your kernel's SYS_PRINT */
+    __asm__ volatile ("int $0x80" : : "a"(1), "c"(str) : "memory");
 }
 
 static inline void iota_ls() {
-    __asm__ volatile ("mov $8, %%eax; int $0x80" ::: "eax");
+    __asm__ volatile ("int $0x80" : : "a"(8) : "memory");
 }
 
 static inline int iota_exec(const char* filename) {
     int return_code;
-    __asm__ volatile (
-        "mov %1, %%ebx\n"
-        "mov $7, %%eax\n"
-        "int $0x80\n"
-        : "=a"(return_code) : "r"(filename) : "ebx"
-    );
+    __asm__ volatile ("int $0x80" : "=a"(return_code) : "a"(7), "b"(filename) : "memory");
     return return_code;
 }
 
 static inline void iota_reboot() {
-    __asm__ volatile ("mov $2, %%eax; int $0x80" ::: "eax");
+    __asm__ volatile ("int $0x80" : : "a"(2) : "memory");
 }
 
 static inline void iota_exit(int exit_code) {
-    __asm__ volatile (
-        "mov %0, %%ebx\n"
-        "mov $6, %%eax\n"
-        "int $0x80"
-        : : "r"(exit_code) : "eax", "ebx"
-    );
+    __asm__ volatile ("int $0x80" : : "a"(6), "b"(exit_code) : "memory");
 }
 
 static inline void iota_meminfo(uint32_t* free, uint32_t* total) {
     uint32_t f, t;
-    __asm__ volatile (
-        "mov $5, %%eax\n"
-        "int $0x80\n"
-        : "=a"(f), "=b"(t) : : 
-    );
+    __asm__ volatile ("int $0x80" : "=a"(f), "=b"(t) : "a"(5) : "memory");
     if(free) *free = f;
     if(total) *total = t;
 }
 
 static inline void iota_get_line(char* buf, int size) {
-    __asm__ volatile (
-        "mov $3, %%eax\n"
-        "mov %0, %%ebx\n"
-        "mov %1, %%ecx\n"
-        "int $0x80"
-        : : "r"(buf), "r"(size) : "eax", "ebx", "ecx"
-    );
+    __asm__ volatile ("int $0x80" : : "a"(3), "b"(buf), "c"(size) : "memory");
 }
 
 static inline void iota_clear() {
-    __asm__ volatile (
-        "mov $4, %%eax\n"
-        "int $0x80"
-        : : : "eax"
-    );
+    __asm__ volatile ("int $0x80" : : "a"(4) : "memory");
 }
 
 static inline int iota_strcmp(const char* s1, const char* s2) {
@@ -107,56 +76,26 @@ static inline uint32_t iota_strlen(const char* str) {
 /* --- TASK MANAGEMENT SYSCALLS --- */
 
 static inline void iota_sleep(uint32_t ms) {
-    __asm__ volatile (
-        "mov %0, %%ebx\n"
-        "mov $9, %%eax\n"
-        "int $0x80\n"
-        : : "r"(ms) : "eax", "ebx"
-    );
+    __asm__ volatile ("int $0x80" : : "a"(9), "b"(ms) : "memory");
 }
 
 static inline void iota_yield(void) {
-    __asm__ volatile (
-        "mov $10, %%eax\n"
-        "int $0x80\n"
-        : : : "eax"
-    );
+    __asm__ volatile ("int $0x80" : : "a"(10) : "memory");
 }
 
-/* Spawns an app as a background task! */
 static inline int iota_spawn(const char* filename) {
     int return_code;
-    __asm__ volatile (
-        "mov %1, %%ebx\n"
-        "mov $11, %%eax\n"
-        "int $0x80\n"
-        : "=a"(return_code) : "r"(filename) : "ebx"
-    );
+    __asm__ volatile ("int $0x80" : "=a"(return_code) : "a"(11), "b"(filename) : "memory");
     return return_code;
 }
 
-/* Draws a character at a specific X/Y coordinate without moving the cursor! */
 static inline void iota_putchar_at(char c, uint8_t color, uint32_t x, uint32_t y) {
     uint32_t coords = (x << 16) | (y & 0xFFFF);
-    __asm__ volatile (
-        "mov %0, %%ebx\n"
-        "mov %1, %%ecx\n"
-        "mov %2, %%edx\n"
-        "mov $12, %%eax\n"
-        "int $0x80\n"
-        : : "r"((uint32_t)c), "r"((uint32_t)color), "r"(coords) : "eax", "ebx", "ecx", "edx"
-    );
+    __asm__ volatile ("int $0x80" : : "a"(12), "b"((uint32_t)c), "c"((uint32_t)color), "d"(coords) : "memory");
 }
 
-/* mode: 1 = Allocate, 0 = Free. mb = Megabytes to allocate */
 static inline void iota_stress_ram(uint32_t mode, uint32_t mb) {
-    __asm__ volatile (
-        "mov %0, %%ebx\n"
-        "mov %1, %%ecx\n"
-        "mov $13, %%eax\n"
-        "int $0x80\n"
-        : : "r"(mode), "r"(mb) : "eax", "ebx", "ecx"
-    );
+    __asm__ volatile ("int $0x80" : : "a"(13), "b"(mode), "c"(mb) : "memory");
 }
 
 #endif
