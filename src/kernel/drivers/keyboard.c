@@ -13,44 +13,62 @@
 #define KEYBOARD_DATA_PORT   0x60
 #define KEYBOARD_STATUS_PORT 0x64
 
-/* US QWERTY Scancode to ASCII map */
-const char kbd_US[128] = {
+/* UK QWERTY Scancode to ASCII map (Standard) */
+char kbd_UK[128] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',   
   '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',   
     0, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`',   
-    0, '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/',   0,
+    0, '#', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/',   0,
     '*', 0,  ' ', 0,  0,  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0
 };
 
-/* A tiny "mailbox" to hold the last key typed */
-volatile char keyboard_buffer = 0;
+/* UK QWERTY Scancode to ASCII map (Shifted) */
+char kbd_UK_shift[128] = {
+    0,  27, '!', '"', '\x9C', '$', '%', '^', '&', '*', '(', ')', '_', '+', '\b',   
+  '\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n',   
+    0, 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '@', '\xAA',   
+    0, '~', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?',   0,
+    '*', 0,  ' ', 0,  0,  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0
+};
 
-/* The interrupt automatically runs this exactly once per keypress! */
+volatile char keyboard_buffer = 0;
+static int shift_pressed = 0;
+
 void keyboard_handle_interrupt(void) {
     uint8_t scancode = inb(KEYBOARD_DATA_PORT);
     
-    /* Only care about the "key pressed down" events (scancodes under 0x80) */
+    /* We inject the extra 105-key ISO key (next to left shift) dynamically */
+    kbd_UK[0x56] = '\\';
+    kbd_UK_shift[0x56] = '|';
+
+    /* Left Shift (0x2A) or Right Shift (0x36) pressed */
+    if (scancode == 0x2A || scancode == 0x36) {
+        shift_pressed = 1;
+        return;
+    }
+    
+    /* Left Shift (0xAA) or Right Shift (0xB6) released */
+    if (scancode == 0xAA || scancode == 0xB6) {
+        shift_pressed = 0;
+        return;
+    }
+    
     if (scancode < 0x80) {
-        char ascii = kbd_US[scancode];
+        /* Pick the correct array based on the shift state */
+        char ascii = shift_pressed ? kbd_UK_shift[scancode] : kbd_UK[scancode];
         if (ascii != 0) {
-            /* Put the letter in the mailbox! */
             keyboard_buffer = ascii;
         }
     }
 }
 
-/* Now getchar just checks the mailbox without locking up the hardware! */
 char getchar(void) {
     char key = 0;
-    
-    /* Wait for the interrupt to put something in the mailbox */
     while (keyboard_buffer == 0) {
-        /* We can put an assembly 'hlt' here later to save power while waiting! */
+        /* Halt the CPU to save power until the next interrupt wakes it up */
+        __asm__ volatile("hlt"); 
     }
-    
-    /* Grab the key and empty the mailbox */
     key = keyboard_buffer;
     keyboard_buffer = 0;
-    
     return key;
 }

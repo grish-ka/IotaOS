@@ -32,6 +32,7 @@ typedef struct {
 
 /* Parse the ramdisk and list files */
 void tar_parse(uint32_t initrd_address);
-void* tar_get_file(uint32_t initrd_address, const char* target_filename);
+void* tar_get_file(uint32_t initrd_address, const char* target_filename,
+                   uint32_t *file_size);
 
 #endif

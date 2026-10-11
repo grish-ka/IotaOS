@@ -1,31 +1,34 @@
 /*
-* IotaOS - linker.ld
-* Copyright (c) 2026 grish-ka
-* Licensed under the MIT License.
-*/
+ * IotaOS - linker.ld
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
 
 ENTRY(_start)
 
 SECTIONS
 {
-    /* Anchor to Byte 0 */
-    . = 0x0;
+    /* Tell the ELF loader to place this app at the 128 MB mark in RAM */
+    . = 0x8000000;
 
-    /* The Header must be FIRST and PROTECTED */
-    .entry : 
-    {
-        KEEP(*( .entry ))
-    }
-
-    /* The Code starts immediately after (at Byte 16) */
-    .text : 
+    .text : ALIGN(4K)
     {
         *(.text*)
     }
 
-    .rodata : { *(.rodata*) }
-    .data   : { *(.data*)   }
-    .bss    : { *(.bss*)    }
-    
-    bin_end = .;
+    .rodata : ALIGN(4K)
+    {
+        *(.rodata*)
+    }
+
+    .data : ALIGN(4K)
+    {
+        *(.data*)
+    }
+
+    .bss : ALIGN(4K)
+    {
+        *(COMMON)
+        *(.bss*)
+    }
 }

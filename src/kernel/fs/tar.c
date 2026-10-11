@@ -49,7 +49,8 @@ void tar_parse(uint32_t initrd_address) {
 }
 
 /* Add this to the bottom of src/kernel/fs/tar.c */
-void* tar_get_file(uint32_t initrd_address, const char* target_filename) {
+void* tar_get_file(uint32_t initrd_address, const char* target_filename,
+                   uint32_t *file_size_out) {
     uint32_t current_address = initrd_address;
     
     serial_printf("Searching for target: '%s' at address 0x%x\n", target_filename, initrd_address);
@@ -80,6 +81,7 @@ void* tar_get_file(uint32_t initrd_address, const char* target_filename) {
 
         if (match) {
             serial_printf(" -> MATCH FOUND! Loading %s...\n", target_filename);
+            if (file_size_out) *file_size_out = file_size;
             return (void*)(current_address + 512);
         }
 

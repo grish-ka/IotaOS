@@ -1,13 +1,10 @@
 /*
- * IotaOS - meminfo-bg.c
+ * IotaOS - meminfo.c
  * Copyright (c) 2026 grish-ka
  * Licensed under the MIT License.
  */
 
 #include "iota.h"
-
-/* Tell the kernel to load this as a background task automatically */
-IOTA_AUTO_BACKGROUND
 
 /* Helper function to draw a number at a specific X/Y coordinate */
 void draw_num_at(uint32_t num, uint8_t color, uint32_t *x_pos, uint32_t y) {
@@ -36,7 +33,7 @@ void draw_num_at(uint32_t num, uint8_t color, uint32_t *x_pos, uint32_t y) {
 }
 
 void main() {
-    iota_print_str(IOTA_RELOC("Started Live Memory Monitor! (Bottom Right)\n"));
+    iota_print_str("Started Live Memory Monitor! (Bottom Right)\n");
     
     while(1) {
         uint32_t free_blocks, total_blocks;
@@ -51,31 +48,30 @@ void main() {
         uint8_t color = 11; /* Light Cyan */
 
         /* 1. Draw " Mem: " */
-        char *prefix = IOTA_RELOC(" Mem: ");
+        const char *prefix = " Mem: ";
         for (int j = 0; prefix[j]; j++) iota_putchar_at(prefix[j], color, x++, 24);
         
         /* 2. Draw the used memory number */
         draw_num_at(used_mb, color, &x, 24);
         
         /* 3. Draw " / " */
-        char *divider = IOTA_RELOC(" / ");
+        const char *divider = " / ";
         for (int j = 0; divider[j]; j++) iota_putchar_at(divider[j], color, x++, 24);
         
         /* 4. Draw the total memory number */
         draw_num_at(total_mb, color, &x, 24);
         
         /* 5. Draw " MB " */
-        char *suffix = IOTA_RELOC(" MB ");
+        const char *suffix = " MB ";
         for (int j = 0; suffix[j]; j++) iota_putchar_at(suffix[j], color, x++, 24);
 
-        char *free_str = IOTA_RELOC(" Free: ");
+        const char *free_str = " Free: ";
         for (int j = 0; free_str[j]; j++) iota_putchar_at(free_str[j], color, x++, 24);
         draw_num_at(free_mb, color, &x, 24);
-        char *mb_str = IOTA_RELOC(" MB");
+        const char *mb_str = " MB";
         for (int j = 0; mb_str[j]; j++) iota_putchar_at(mb_str[j], color, x++, 24);
 
-        /* 6. Clear out any leftover characters (in case the number shrank from 100 to 99),
-         * but leave 3 extra columns on the right so the full text always fits. */
+        /* 6. Clear out any leftover characters */
         while (x < 77) {
             iota_putchar_at(' ', color, x++, 24);
         }

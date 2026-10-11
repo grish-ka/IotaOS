@@ -10,12 +10,13 @@
 #include "drivers/keyboard.h"
 #include "drivers/string.h"
 #include "drivers/system.h"
-#include "drivers/ib_loader.h"
+#include "drivers/elf_loader.h"
 #include "drivers/timer.h"    
 #include "cpu/idt.h"
 #include "cpu/pic.h"
 #include "cpu/task.h"
 #include "mem/pmm.h"
+#include "mem/paging.h"
 #include "multiboot.h"
 #include "fs/tar.h"
 
@@ -68,16 +69,16 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
     /* 1. PMM Initialization - using the dynamically detected RAM size! */
     pmm_init(total_memory, bitmap_loc); 
 
-    /* Mark the first 4MB as used (Protects BIOS, VGA, Kernel, Ramdisk, and Bitmap) */
-    for (uint32_t i = 0; i < 0x400000; i += 4096) {
-        pmm_mark_used(i);
-    }
-
-    /* Mark the rest of the detected RAM as FREE. 
-       (We use a bitwise mask to ensure we don't accidentally exceed the memory limit) */
-    for (uint32_t i = 0x400000; i < (total_memory & ~4095); i += 4096) {
+    /* Keep the kernel, initrd, and bitmap reserved before freeing allocatable RAM. */
+    uint32_t bitmap_bytes = ((total_memory / 4096) + 7) / 8;
+    uint32_t first_free = bitmap_loc + bitmap_bytes;
+    first_free = (first_free + 4095) & ~4095;
+    if (first_free < 0x400000) first_free = 0x400000;
+    for (uint32_t i = first_free; i < (total_memory & ~4095); i += 4096) {
         pmm_mark_free(i);
     }
+
+    paging_init(total_memory);
 
     /* 2. Initialize the Scheduler and spawn the background task */
     task_init();
@@ -86,7 +87,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
     timer_init(100);
     __asm__ volatile("sti");
 
-    char* IOTAOS_KERNEL_VERSION = "0.1.5";
+    char* IOTAOS_KERNEL_VERSION = "0.1.6";
 
     terminal_writestring("Hello, kernel World!\n");
     terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n\n");
@@ -99,9 +100,10 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         " |___\\___/ \\__\\__,_|\\___/|____/ \n\n"
     );
 
-    void* sh_file = tar_get_file(global_initrd_address, "iosh.ib");
+    uint32_t sh_file_size = 0;
+    void* sh_file = tar_get_file(global_initrd_address, "iosh.elf", &sh_file_size);
     if (sh_file) {
-        int exit_code = ib_load_and_run(sh_file);
+        int exit_code = elf_load_and_run(sh_file, sh_file_size);
 
         if (exit_code != 0) {
             char panic_msg[64];
@@ -110,7 +112,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         }
 
     } else {
-        panic("Critical Error: iosh.ib not found in ramdisk!");
+        panic("Critical Error: iosh.elf not found in ramdisk!");
     }
 
     shutdown();
@@ -126,7 +128,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
             printf("Available commands:\n");
             printf("  help    - Show this help message\n");
             printf("  ls      - List files in the ramdisk\n");
-            printf("  run     - Execute an .ib file (e.g. 'run test.ib')\n");
+            printf("  run     - Execute an .elf file (e.g. './test.elf')\n");
             printf("  meminfo - Show physical memory usage information\n");
             printf("  version - Show the kernel and shell version\n");
             printf("  clear   - Clear the terminal screen\n");
@@ -146,11 +148,16 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
             if (global_initrd_address == 0) {
                 printf("Error: No ramdisk loaded.\n");
             } else {
-                void* file_data = tar_get_file(global_initrd_address, filename);
+                uint32_t file_size = 0;
+                void* file_data = tar_get_file(global_initrd_address, filename,
+                                               &file_size);
                 if (file_data == NULL) {
                     printf("Error: File '%s' not found.\n", filename);
                 } else {
-                    ib_load_and_run(file_data);
+                    int exit_code = elf_load_and_run(file_data, file_size);
+                    if (exit_code < 0) {
+                        printf("Error: Failed to load or run '%s'.\n", filename);
+                    }
                 }
             }
         }

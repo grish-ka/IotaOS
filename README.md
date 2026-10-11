@@ -15,7 +15,7 @@ IotaOS is actively evolving\! Here is the current development roadmap for upcomi
 
 * **Architecture Overhaul:** Transition from a monolithic kernel to a lightweight, modular **Microkernel**.  
 * **IPC (Inter-Process Communication):** Build a secure message-passing system so user-space programs can safely talk to the kernel.  
-* **Virtual Memory:** Implement Paging to give every .ib application its own isolated, secure memory space.
+* **Virtual Memory:** Implement Paging to give every `.elf` application its own isolated, secure memory space.
 
 ### **🔌 Phase 2: The Driver Ecosystem (v0.3.x)**
 
@@ -60,21 +60,20 @@ IotaOS is actively evolving\! Here is the current development roadmap for upcomi
 
 This is slowly being converted to `TODO.json` for [go-check](https://github.com/grish-ka/go-check) as we are using it so [go-check](https://github.com/grish-ka/go-check) will be getting updates
 
-## Make your own `.ib` file
+## Make your own `.elf` application
 1. Download the ADK (App Development Kit) from the latest realese
 2. Create the `Makefile` for building your app
 ```Make
 # Point this to wherever the ADK is installed on the computer!
 IOTA_ADK_PATH = ../IotaADK
 
-all: myapp.ib
+all: myapp.elf
 
-myapp.ib: main.c
+myapp.elf: main.c
 	# We just use the tools from the IOTA_ADK_PATH variable!
 	i686-elf-as $(IOTA_ADK_PATH)/lib/crt0.s -o crt0.o
-	i686-elf-gcc -c main.c -o myapp.o -I$(IOTA_ADK_PATH)/include -fno-asynchronous-unwind-tables
+	i686-elf-gcc -c main.c -o myapp.o -I$(IOTA_ADK_PATH)/include -ffreestanding -fno-asynchronous-unwind-tables -fno-pie -fno-pic
 	i686-elf-ld -T $(IOTA_ADK_PATH)/lib/linker.ld -o myapp.elf crt0.o myapp.o
-	i686-elf-objcopy -O binary myapp.elf myapp.ib
 ```
 
 ## Set Up GCC Cross Compiler

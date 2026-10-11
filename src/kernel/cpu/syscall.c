@@ -10,11 +10,15 @@
 #include "drivers/system.h"
 #include "mem/pmm.h"
 #include "fs/tar.h"            
-#include "drivers/ib_loader.h" 
-#include "cpu/task.h" /* <--- ADD THIS FOR create_task() */
+#include "drivers/elf_loader.h"
+#include "cpu/task.h" 
 
 extern uint32_t global_initrd_address;
 int current_exit_code = 0; 
+
+#define MAX_STRESS_PAGES 65536 /* Allows up to 256 MB to be hoarded */
+uint32_t stress_pointers[MAX_STRESS_PAGES];
+uint32_t stress_allocated = 0;
 
 void syscall_handler(registers_t *regs) {
     switch (regs->eax) {
@@ -57,27 +61,13 @@ void syscall_handler(registers_t *regs) {
                 printf("Error: No ramdisk loaded.\n");
                 regs->eax = -1;
             } else {
-                void* file_data = tar_get_file(global_initrd_address, filename);
+                uint32_t file_size = 0;
+                void* file_data = tar_get_file(global_initrd_address, filename, &file_size);
                 if (file_data == NULL) {
                     printf("Error: File '%s' not found.\n", filename);
                     regs->eax = -1;
                 } else {
-                    struct ib_header* header = (struct ib_header*)file_data;
-                    if (header->magic == IB_MAGIC) {
-                        /* Check for Auto-Background Flag! */
-                        if (header->flags & 1) {
-                            uint32_t code_ptr = (uint32_t)file_data + header->code_offset;
-                            create_task((void (*)())code_ptr);
-                            regs->eax = 0; 
-                        } else {
-                            /* Normal Foreground App */
-                            ib_load_and_run(file_data);
-                            regs->eax = current_exit_code;
-                        }
-                    } else {
-                        printf("Error: Invalid Magic!\n");
-                        regs->eax = -1;
-                    }
+                    regs->eax = elf_load_and_run(file_data, file_size);
                 }
             }
             break;
@@ -107,19 +97,22 @@ void syscall_handler(registers_t *regs) {
             if (global_initrd_address == 0) {
                 regs->eax = -1;
             } else {
-                void* file_data = tar_get_file(global_initrd_address, filename);
+                uint32_t file_size = 0;
+                void* file_data = tar_get_file(global_initrd_address, filename, &file_size);
                 if (file_data == NULL) {
                     printf("Error: File '%s' not found.\n", filename);
                     regs->eax = -1;
                 } else {
-                    struct ib_header* header = (struct ib_header*)file_data;
-                    if (header->magic == IB_MAGIC) {
-                        /* Get the memory address of the code and send it to the scheduler! */
-                        uint32_t code_ptr = (uint32_t)file_data + header->code_offset;
-                        create_task((void (*)())code_ptr);
-                        regs->eax = 0;
+                    elf_image_t image;
+                    if (elf_load(file_data, file_size, &image) == 0) {
+                        /* Feed the isolated Page Directory into the scheduler! */
+                        if (create_task((void (*)(void))image.entry, image.page_directory) == 0) {
+                            regs->eax = 0;
+                        } else {
+                            elf_unload(&image);
+                            regs->eax = -1;
+                        }
                     } else {
-                        printf("Error: Invalid Magic!\n");
                         regs->eax = -1;
                     }
                 }
@@ -136,6 +129,29 @@ void syscall_handler(registers_t *regs) {
             size_t y = (size_t)(regs->edx & 0xFFFF);
             
             terminal_putentryat(c, color, x, y);
+            break;
+        }
+
+        case 13: /* SYS_STRESS_RAM */
+        {
+            if (regs->ebx == 1) { /* Allocate */
+                uint32_t pages_to_alloc = regs->ecx * 256; /* 256 pages per MB */
+                uint32_t allocated_this_run = 0;
+                
+                while (allocated_this_run < pages_to_alloc && stress_allocated < MAX_STRESS_PAGES) {
+                    // lets see with no limit < MAX_STRESS_PAGES
+                    void* block = pmm_alloc_block();
+                    if (!block) break; /* Out of memory! */
+                    stress_pointers[stress_allocated++] = (uint32_t)block;
+                    allocated_this_run++;
+                }
+            } 
+            else if (regs->ebx == 0) { /* Free */
+                for (uint32_t i = 0; i < stress_allocated; i++) {
+                    pmm_free_block((void*)stress_pointers[i]);
+                }
+                stress_allocated = 0;
+            }
             break;
         }
 

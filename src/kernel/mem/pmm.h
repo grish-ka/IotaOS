@@ -24,6 +24,7 @@ void pmm_mark_free(uint32_t addr);
 
 /* Allocate/Free a single 4KB block */
 void* pmm_alloc_block();
+void* pmm_alloc_blocks(uint32_t count);
 void pmm_free_block(void* addr);
 
 uint32_t pmm_get_free_block_count(void);

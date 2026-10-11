@@ -7,7 +7,7 @@
 #include "iota.h"
 
 void main() {
-    iota_print_str(IOTA_RELOC("Running Spinner Task! Look at the top right!\n"));
+    iota_print_str("Running Spinner Task! Look at the top right!\n");
     
     char spinner_chars[] = {'-', '\\', '|', '/'};
     int i = 0;

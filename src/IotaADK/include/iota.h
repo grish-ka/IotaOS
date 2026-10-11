@@ -9,11 +9,8 @@
 
 #include <stdint.h>
 
-/* Put this anywhere in your C file to tell the kernel to run it in the background! */
-#define IOTA_AUTO_BACKGROUND __asm__(".global __iota_app_flags\n.set __iota_app_flags, 1\n");
-
 /* IOTA_RELOC dynamically calculates physical load addresses at runtime.
- * Mandatory for all static strings and global variables! */
+ * Mandatory for all static strings and global variables until we build Virtual Memory! */
 #define IOTA_RELOC(ptr) ({ \
     uintptr_t __base; \
     __asm__ volatile ( \
@@ -140,7 +137,6 @@ static inline int iota_spawn(const char* filename) {
 
 /* Draws a character at a specific X/Y coordinate without moving the cursor! */
 static inline void iota_putchar_at(char c, uint8_t color, uint32_t x, uint32_t y) {
-    /* Pack X and Y into a single 32-bit integer to pass to the kernel */
     uint32_t coords = (x << 16) | (y & 0xFFFF);
     __asm__ volatile (
         "mov %0, %%ebx\n"
@@ -149,6 +145,17 @@ static inline void iota_putchar_at(char c, uint8_t color, uint32_t x, uint32_t y
         "mov $12, %%eax\n"
         "int $0x80\n"
         : : "r"((uint32_t)c), "r"((uint32_t)color), "r"(coords) : "eax", "ebx", "ecx", "edx"
+    );
+}
+
+/* mode: 1 = Allocate, 0 = Free. mb = Megabytes to allocate */
+static inline void iota_stress_ram(uint32_t mode, uint32_t mb) {
+    __asm__ volatile (
+        "mov %0, %%ebx\n"
+        "mov %1, %%ecx\n"
+        "mov $13, %%eax\n"
+        "int $0x80\n"
+        : : "r"(mode), "r"(mb) : "eax", "ebx", "ecx"
     );
 }
 
