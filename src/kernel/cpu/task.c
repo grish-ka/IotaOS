@@ -7,11 +7,13 @@
 #include "task.h"
 #include "../mem/pmm.h"
 #include "../mem/paging.h" 
+#include "../drivers/string.h"
 
 typedef struct {
     uint32_t esp;
     uint32_t* page_directory; 
-    volatile uint8_t active; /* FIX: Force the CPU to read from RAM every time */
+    volatile uint8_t active;
+    char cwd[128]; 
 } task_t;
 
 #define MAX_TASKS 16
@@ -28,6 +30,7 @@ static void task_returned(void) {
 void task_init(void) {
     tasks[0].active = 1; 
     tasks[0].page_directory = kernel_directory; 
+    strcpy(tasks[0].cwd, "/"); 
     task_count = 1;
 }
 
@@ -62,6 +65,8 @@ int create_task(void (*entry)(), uint32_t* page_dir) {
     tasks[task_count].esp = (uint32_t)stack;
     tasks[task_count].page_directory = page_dir; 
     tasks[task_count].active = 1;
+    strcpy(tasks[task_count].cwd, tasks[current_task].cwd);
+    
     task_count++;
     return 0;
 }
@@ -111,8 +116,9 @@ int task_fork(registers_t *regs) {
     tasks[child_pid].esp = child_esp;
     tasks[child_pid].page_directory = child_dir;
     tasks[child_pid].active = 1;
+    strcpy(tasks[child_pid].cwd, tasks[current_task].cwd);
+    
     task_count++;
-
     return child_pid;
 }
 
@@ -125,7 +131,14 @@ void task_wait(int pid) {
     if (pid < 0 || pid >= MAX_TASKS) return;
     
     while (tasks[pid].active) {
-        /* FIX: Add the memory clobber so GCC knows RAM might change during the interrupt */
         __asm__ volatile ("int $32" : : : "memory"); 
     }
+}
+
+char* task_get_cwd(void) {
+    return tasks[current_task].cwd;
+}
+
+void task_set_cwd(const char* path) {
+    strcpy(tasks[current_task].cwd, path);
 }

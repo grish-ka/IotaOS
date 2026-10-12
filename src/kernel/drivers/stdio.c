@@ -1,186 +1,179 @@
 /*
+ * IotaOS - stdio.c
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
 
-IotaOS - stdio.c
+#include "drivers/stdio.h"
+#include "drivers/terminal.h"
+#include <stdarg.h>
+#include <stdbool.h>
 
-Copyright (c) 2026 grish-ka
+/* Helper function for number to string conversion */
+static void itoa(unsigned int value, char* str, int base) {
+    char* ptr = str;
+    char* ptr1 = str;
+    char tmp_char;
+    unsigned int tmp_value;
 
-Licensed under the MIT License.
-*/
+    if (value == 0) {
+        *ptr++ = '0';
+        *ptr = '\0';
+        return;
+    }
 
-#include "stdio.h"
-#include "terminal.h"
-#include "keyboard.h"
-#include "timer.h"
-#include "io.h" /* Needed for COM1 serial ports */
-#include <stdint.h>
-#include <stddef.h>
+    while (value != 0) {
+        tmp_value = value % base;
+        *ptr++ = (tmp_value < 10) ? (tmp_value + '0') : (tmp_value - 10 + 'a');
+        value /= base;
+    }
+    *ptr = '\0';
 
-/* --- NEW: SERIAL DEBUGGER (COM1) --- */
-void init_serial() {
-outb(0x3F8 + 1, 0x00);    /* Disable all interrupts */
-outb(0x3F8 + 3, 0x80);    /* Enable DLAB (set baud rate divisor) */
-outb(0x3F8 + 0, 0x03);    /* Set divisor to 3 (lo byte) 38400 baud */
-outb(0x3F8 + 1, 0x00);    /*                  (hi byte) */
-outb(0x3F8 + 3, 0x03);    /* 8 bits, no parity, one stop bit */
-outb(0x3F8 + 2, 0xC7);    /* Enable FIFO, clear them, with 14-byte threshold */
-outb(0x3F8 + 4, 0x0B);    /* IRQs enabled, RTS/DSR set */
-}
-
-static void serial_putchar(char a) {
-while ((inb(0x3F8 + 5) & 0x20) == 0); /* Wait for transmit to be empty */
-outb(0x3F8, a);
-}
-
-static int int_to_string(int num, int base, char* buffer) {
-if (num == 0) {
-buffer[0] = '0';
-buffer[1] = '\0';
-return 1;
-}
-int is_negative = 0;
-unsigned int unum = num;
-if (num < 0 && base == 10) {
-is_negative = 1;
-unum = (unsigned int)(-num);
-}
-const char digits[] = "0123456789abcdef";
-char temp[32];
-int temp_i = 0;
-while (unum > 0) {
-temp[temp_i++] = digits[unum % base];
-unum /= base;
-}
-if (is_negative) temp[temp_i++] = '-';
-int count = 0;
-while (temp_i > 0) buffer[count++] = temp[--temp_i];
-buffer[count] = '\0';
-return count;
+    ptr--;
+    while (ptr1 < ptr) {
+        tmp_char = *ptr;
+        *ptr-- = *ptr1;
+        *ptr1++ = tmp_char;
+    }
 }
 
-/* Sends invisible logs straight to your Linux Terminal! */
-void serial_printf(const char *format, ...) {
-va_list args;
-va_start(args, format);
-while (*format != '\0') {
-if (*format == '%') {
-format++;
-if (*format == 's') {
-char *str = va_arg(args, char *);
-while (*str) serial_putchar(*str++);
-} else if (*format == 'd') {
-char buf[32];
-int_to_string(va_arg(args, int), 10, buf);
-char *str = buf;
-while (*str) serial_putchar(*str++);
-} else if (*format == 'x') {
-char buf[32];
-int_to_string(va_arg(args, int), 16, buf);
-char *str = buf;
-while (*str) serial_putchar(*str++);
-} else if (*format == 'c') {
-serial_putchar((char)va_arg(args, int));
-}
-} else {
-serial_putchar(*format);
-}
-format++;
-}
-va_end(args);
+void putchar(char c) {
+    terminal_putchar(c);
 }
 
-/* ... existing sprintf, printf, atoi, gets, sleep functions stay below here ... */
-int sprintf(char *buffer, const char* format, ...) {
-va_list args;
-va_start(args, format);
-int buf_idx = 0;
-while (*format != '\0') {
-if (*format == '%') {
-format++;
-if (*format == 's') {
-char *str = va_arg(args, char *);
-while (*str) buffer[buf_idx++] = *str++;
-} else if (*format == 'd') {
-buf_idx += int_to_string(va_arg(args, int), 10, &buffer[buf_idx]);
-} else if (*format == 'x') {
-buf_idx += int_to_string(va_arg(args, int), 16, &buffer[buf_idx]);
-} else if (*format == 'c') {
-buffer[buf_idx++] = (char)va_arg(args, int);
-} else if (*format == '%') {
-buffer[buf_idx++] = '%';
-}
-} else {
-buffer[buf_idx++] = *format;
-}
-format++;
-}
-buffer[buf_idx] = '\0';
-va_end(args);
-return buf_idx;
+void puts(const char* str) {
+    while (*str) {
+        putchar(*str++);
+    }
+    putchar('\n');
 }
 
-void printf(const char* format, ...) {
-va_list args;
-va_start(args, format);
-while (*format != '\0') {
-if (*format == '%') {
-format++;
-if (*format == 's') {
-terminal_writestring(va_arg(args, char *));
-} else if (*format == 'd') {
-char buf[32];
-int_to_string(va_arg(args, int), 10, buf);
-terminal_writestring(buf);
-} else if (*format == 'x') {
-char buf[32];
-int_to_string(va_arg(args, int), 16, buf);
-terminal_writestring(buf);
-} else if (*format == 'c') {
-terminal_putchar((char)va_arg(args, int));
-}
-} else {
-terminal_putchar(*format);
-}
-format++;
-}
-va_end(args);
+int printf(const char* format, ...) {
+    va_list arg;
+    va_start(arg, format);
+    int written = 0;
+    char buffer[32];
+
+    for (int i = 0; format[i] != '\0'; i++) {
+        if (format[i] == '%') {
+            i++;
+            if (format[i] == 'd' || format[i] == 'i') {
+                int val = va_arg(arg, int);
+                if (val < 0) {
+                    putchar('-');
+                    written++;
+                    val = -val;
+                }
+                itoa(val, buffer, 10);
+                for (int j = 0; buffer[j] != '\0'; j++) {
+                    putchar(buffer[j]);
+                    written++;
+                }
+            } else if (format[i] == 'u') {
+                unsigned int val = va_arg(arg, unsigned int);
+                itoa(val, buffer, 10);
+                for (int j = 0; buffer[j] != '\0'; j++) {
+                    putchar(buffer[j]);
+                    written++;
+                }
+            } else if (format[i] == 'x' || format[i] == 'X') {
+                unsigned int val = va_arg(arg, unsigned int);
+                itoa(val, buffer, 16);
+                for (int j = 0; buffer[j] != '\0'; j++) {
+                    putchar(buffer[j]);
+                    written++;
+                }
+            } else if (format[i] == 's') {
+                char* str = va_arg(arg, char*);
+                if (!str) str = "(null)";
+                for (int j = 0; str[j] != '\0'; j++) {
+                    putchar(str[j]);
+                    written++;
+                }
+            } else if (format[i] == 'c') {
+                char c = (char)va_arg(arg, int);
+                putchar(c);
+                written++;
+            } else if (format[i] == '%') {
+                putchar('%');
+                written++;
+            }
+        } else {
+            putchar(format[i]);
+            written++;
+        }
+    }
+    va_end(arg);
+    return written;
 }
 
-int atoi(const char* str) {
-int result = 0;
-int sign = 1;
-while (*str == ' ') str++;
-if (*str == '-') { sign = -1; str++; }
-while (*str >= '0' && *str <= '9') {
-result = result * 10 + (*str - '0');
-str++;
-}
-return result * sign;
+int sprintf(char* str, const char* format, ...) {
+    va_list arg;
+    va_start(arg, format);
+    int written = 0;
+    char buffer[32];
+
+    for (int i = 0; format[i] != '\0'; i++) {
+        if (format[i] == '%') {
+            i++;
+            if (format[i] == 'd' || format[i] == 'i') {
+                int val = va_arg(arg, int);
+                if (val < 0) {
+                    str[written++] = '-';
+                    val = -val;
+                }
+                itoa(val, buffer, 10);
+                for (int j = 0; buffer[j] != '\0'; j++) {
+                    str[written++] = buffer[j];
+                }
+            } else if (format[i] == 'u') {
+                unsigned int val = va_arg(arg, unsigned int);
+                itoa(val, buffer, 10);
+                for (int j = 0; buffer[j] != '\0'; j++) {
+                    str[written++] = buffer[j];
+                }
+            } else if (format[i] == 'x' || format[i] == 'X') {
+                unsigned int val = va_arg(arg, unsigned int);
+                itoa(val, buffer, 16);
+                for (int j = 0; buffer[j] != '\0'; j++) {
+                    str[written++] = buffer[j];
+                }
+            } else if (format[i] == 's') {
+                char* s = va_arg(arg, char*);
+                if (!s) s = "(null)";
+                for (int j = 0; s[j] != '\0'; j++) {
+                    str[written++] = s[j];
+                }
+            } else if (format[i] == 'c') {
+                char c = (char)va_arg(arg, int);
+                str[written++] = c;
+            } else if (format[i] == '%') {
+                str[written++] = '%';
+            }
+        } else {
+            str[written++] = format[i];
+        }
+    }
+    str[written] = '\0';
+    va_end(arg);
+    return written;
 }
 
-void gets(char* buffer, int max_size) {
-int count = 0;
-while (count < max_size - 1) {
-char c = getchar();
-if (c == '\n') {
-printf("\n");
-break;
-} else if (c == '\b') {
-if (count > 0) {
-count--;
-printf("\b");
-}
-} else if (c != 0 && c != '\r') {
-buffer[count++] = c;
-printf("%c", c);
-}
-}
-buffer[count] = '\0';
-}
-
-void sleep(uint32_t ms) {
-uint32_t target_ticks = timer_get_ticks() + (ms / 10);
-if (ms > 0 && ms < 10) target_ticks = timer_get_ticks() + 1;
-while (timer_get_ticks() < target_ticks) {
-asm volatile("hlt");
-}
+char* gets(char* str, int max_length) {
+    int i = 0;
+    while (i < max_length - 1) {
+        char c = getchar();
+        
+        if (c == '\n') {
+            break;
+        } else if (c == '\b') {
+            if (i > 0) {
+                i--;
+            }
+        } else {
+            str[i++] = c;
+        }
+    }
+    str[i] = '\0';
+    return str;
 }

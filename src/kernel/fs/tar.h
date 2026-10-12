@@ -8,14 +8,14 @@
 #define TAR_H
 
 #include <stdint.h>
+#include "fs/vfs.h"
 
-/* The standard USTAR header is exactly 512 bytes long */
 typedef struct {
     char filename[100];
     char mode[8];
     char uid[8];
     char gid[8];
-    char size[12];       /* File size in ASCII octal! */
+    char size[12];       
     char mtime[12];
     char chksum[8];
     char typeflag;
@@ -27,12 +27,13 @@ typedef struct {
     char devmajor[8];
     char devminor[8];
     char prefix[155];
-    char padding[12];    /* Pads the struct to exactly 512 bytes */
+    char padding[12];    
 } __attribute__((packed)) tar_header_t;
 
-/* Parse the ramdisk and list files */
-void tar_parse(uint32_t initrd_address);
-void* tar_get_file(uint32_t initrd_address, const char* target_filename,
-                   uint32_t *file_size);
+/* Mounts the ramdisk into the VFS tree and returns the root node */
+vfs_node_t* tar_mount(uint32_t initrd_address);
+
+/* Legacy function kept for the moment until syscalls are updated */
+void* tar_get_file(uint32_t initrd_address, const char* target_filename, uint32_t *file_size);
 
 #endif

@@ -44,8 +44,8 @@ static inline int iota_close(int fd) {
     return ret;
 }
 
-static inline void iota_ls() {
-    __asm__ volatile ("int $0x80" : : "a"(8) : "memory");
+static inline void iota_ls(const char* target) {
+    __asm__ volatile ("int $0x80" : : "a"(8), "b"(target) : "memory");
 }
 
 static inline int iota_exec(const char* filename) {
@@ -118,6 +118,16 @@ static inline void iota_wait(int pid) {
 
 static inline void iota_get_env(char* buf) {
     __asm__ volatile ("int $0x80" : : "a"(21), "b"(buf) : "memory");
+}
+
+static inline int iota_chdir(const char* path) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(22), "b"(path) : "memory");
+    return ret;
+}
+
+static inline void iota_getcwd(char* buf) {
+    __asm__ volatile ("int $0x80" : : "a"(23), "b"(buf) : "memory");
 }
 
 #endif

@@ -8,11 +8,14 @@
 #include "drivers/stdio.h"
 #include "drivers/terminal.h"
 #include "drivers/system.h"
+#include "drivers/string.h" /* <--- Explicitly include this! */
 #include "mem/pmm.h"
 #include "mem/paging.h"
 #include "fs/tar.h"            
 #include "drivers/elf_loader.h"
 #include "cpu/task.h" 
+#include "fs/vfs.h"
+#include "drivers/timer.h"
 
 extern uint32_t global_initrd_address;
 int current_exit_code = 0; 
@@ -24,21 +27,32 @@ uint32_t stress_allocated = 0;
 uint32_t current_heap_end = 0x40000000; 
 
 char current_process_args[256] = {0};
-
-/* --- ENVIRONMENT VARIABLES --- 
- * We store multiple null-terminated strings, and mark the end of the 
- * entire list with a double null-terminator (\0\0). */
 char current_process_env[256] = "TERM=linux\0USER=root\0";
 
 #define MAX_OPEN_FILES 32
 typedef struct {
     uint8_t used;
-    uint8_t* data;
+    vfs_node_t* node;
     uint32_t size;
     uint32_t offset;
 } fd_entry_t;
 
 fd_entry_t fd_table[MAX_OPEN_FILES] = {0};
+
+static void build_absolute_path(const char* rel, char* abs) {
+    /* Strip leading "./" so the VFS doesn't get confused */
+    if (rel[0] == '.' && rel[1] == '/') {
+        rel += 2;
+    }
+
+    if (rel[0] == '/') {
+        strcpy(abs, rel);
+    } else {
+        strcpy(abs, task_get_cwd());
+        if (abs[strlen(abs)-1] != '/') strcat(abs, "/");
+        strcat(abs, rel);
+    }
+}
 
 void syscall_handler(registers_t *regs) {
     switch (regs->eax) {
@@ -57,21 +71,28 @@ void syscall_handler(registers_t *regs) {
             int count = (int)regs->edx;
             
             if (fd == 0) { 
-                __asm__ volatile("sti"); 
-                gets(buf, count); 
+                __asm__ volatile("sti");
+                vfs_node_t* tty = tty_get_vfs_node();
+                uint32_t bytes_read = vfs_read(tty, 0, count, (uint8_t*)buf);
+                
+                /* Strip the trailing newline that the old gets() used to remove */
+                if (bytes_read > 0 && buf[bytes_read - 1] == '\n') {
+                    buf[bytes_read - 1] = '\0';
+                    bytes_read--;
+                } else if (bytes_read < (uint32_t)count) {
+                    buf[bytes_read] = '\0';
+                } else {
+                    buf[count - 1] = '\0';
+                }
+                
                 __asm__ volatile("cli"); 
-                regs->eax = count; 
+                regs->eax = bytes_read; 
             } 
             else if (fd >= 3 && fd < MAX_OPEN_FILES && fd_table[fd].used) {
                 fd_entry_t* file = &fd_table[fd];
-                int available = file->size - file->offset;
-                if (count > available) count = available; 
-                
-                for (int i = 0; i < count; i++) {
-                    buf[i] = file->data[file->offset + i];
-                }
-                file->offset += count;
-                regs->eax = count;
+                uint32_t bytes_read = vfs_read(file->node, file->offset, count, (uint8_t*)buf);
+                file->offset += bytes_read;
+                regs->eax = bytes_read;
             } else {
                 regs->eax = -1; 
             }
@@ -85,10 +106,10 @@ void syscall_handler(registers_t *regs) {
             int count = (int)regs->edx;
 
             if (fd == 1 || fd == 2) { 
-                for (int i = 0; i < count; i++) {
-                    terminal_putchar(buf[i]);
-                }
-                regs->eax = count;
+                /* NEW: Write directly to the TTY device */
+                vfs_node_t* tty = tty_get_vfs_node();
+                uint32_t bytes_written = vfs_write(tty, 0, count, (uint8_t*)buf);
+                regs->eax = bytes_written;
             } else {
                 regs->eax = -1; 
             }
@@ -107,7 +128,6 @@ void syscall_handler(registers_t *regs) {
             }
             current_exit_code = regs->ebx; 
             printf("\n[Process %d exited with code %d]\n", current_task, current_exit_code);
-
             task_exit();
             break;
         }
@@ -117,13 +137,11 @@ void syscall_handler(registers_t *regs) {
         {
             char* full_cmd = (char*)regs->ebx;
             char filename[64] = {0};
-            
             int i = 0;
             while (full_cmd[i] != ' ' && full_cmd[i] != '\0' && i < 63) {
                 filename[i] = full_cmd[i];
                 i++;
             }
-            
             int j = 0;
             while (full_cmd[j] != '\0' && j < 255) {
                 current_process_args[j] = full_cmd[j];
@@ -131,43 +149,63 @@ void syscall_handler(registers_t *regs) {
             }
             current_process_args[j] = '\0';
 
-            if (global_initrd_address == 0) {
-                printf("Error: No ramdisk loaded.\n");
+            char abs_path[128];
+            build_absolute_path(filename, abs_path);
+
+            vfs_node_t* node = vfs_get_node(abs_path);
+            if (!node) {
+                printf("Error: File '%s' not found.\n", abs_path);
                 regs->eax = -1;
                 break;
             }
 
-            uint32_t file_size = 0;
-            void* file_data = tar_get_file(global_initrd_address, filename, &file_size);
-            if (file_data == NULL) {
-                printf("Error: File '%s' not found.\n", filename);
-                regs->eax = -1;
-                break;
-            }
+            uint32_t pages_needed = (node->size + 4095) / 4096;
+            uint8_t* temp_buffer = (uint8_t*)pmm_alloc_blocks(pages_needed);
+            vfs_read(node, 0, node->size, temp_buffer);
 
             if (regs->eax == 7) {
-                regs->eax = elf_load_and_run(file_data, file_size);
+                regs->eax = elf_load_and_run(temp_buffer, node->size);
             } else {
                 elf_image_t image;
-                if (elf_load(file_data, file_size, &image) == 0) {
+                if (elf_load(temp_buffer, node->size, &image) == 0) {
                     if (create_task((void (*)(void))image.entry, image.page_directory) == 0) regs->eax = 0;
                     else { elf_unload(&image); regs->eax = -1; }
                 } else regs->eax = -1;
+            }
+            
+            for (uint32_t p = 0; p < pages_needed; p++) {
+                pmm_free_block(temp_buffer + (p * 4096));
             }
             break;
         }
 
         case 8: /* SYS_LS */
-            if (global_initrd_address == 0) {
-                printf("Error: No ramdisk loaded.\n");
-            } else {
-                tar_parse(global_initrd_address);
+        {
+            char* target = (char*)regs->ebx;
+            char abs_path[128];
+            
+            if (target[0] == '\0') strcpy(abs_path, task_get_cwd());
+            else build_absolute_path(target, abs_path);
+            
+            vfs_node_t* target_dir = vfs_get_node(abs_path);
+            if (!target_dir) {
+                printf("ls: cannot access '%s': No such directory\n", abs_path);
+                break;
             }
+            
+            int index = 0;
+            struct dirent *dir_node = 0;
+            while ((dir_node = vfs_readdir(target_dir, index)) != NULL) {
+                printf("%s ", dir_node->name);
+                index++;
+            }
+            printf("\n");
             break;
+        }
 
         case 9: /* SYS_SLEEP */
             __asm__ volatile("sti"); 
-            sleep((uint32_t)regs->ebx);
+            timer_sleep((uint32_t)regs->ebx);
             __asm__ volatile("cli");
             break;
 
@@ -245,23 +283,24 @@ void syscall_handler(registers_t *regs) {
         case 16: /* SYS_OPEN */
         {
             char* filename = (char*)regs->ebx;
-            if (global_initrd_address == 0) { regs->eax = -1; break; }
+            char abs_path[128];
+            build_absolute_path(filename, abs_path);
             
-            uint32_t file_size = 0;
-            void* file_data = tar_get_file(global_initrd_address, filename, &file_size);
-            if (file_data == NULL) { regs->eax = -1; break; }
+            vfs_node_t* node = vfs_get_node(abs_path);
+            if (!node) { regs->eax = -1; break; }
             
             int fd = -1;
             for (int i = 3; i < MAX_OPEN_FILES; i++) {
                 if (fd_table[i].used == 0) {
                     fd_table[i].used = 1;
-                    fd_table[i].data = (uint8_t*)file_data;
-                    fd_table[i].size = file_size;
+                    fd_table[i].node = node;
+                    fd_table[i].size = node->size;
                     fd_table[i].offset = 0;
                     fd = i;
                     break;
                 }
             }
+            if (fd != -1) vfs_open(node);
             regs->eax = fd; 
             break;
         }
@@ -269,7 +308,8 @@ void syscall_handler(registers_t *regs) {
         case 17: /* SYS_CLOSE */
         {
             int fd = (int)regs->ebx;
-            if (fd >= 3 && fd < MAX_OPEN_FILES) {
+            if (fd >= 3 && fd < MAX_OPEN_FILES && fd_table[fd].used) {
+                vfs_close(fd_table[fd].node);
                 fd_table[fd].used = 0;
                 regs->eax = 0; 
             } else {
@@ -308,7 +348,6 @@ void syscall_handler(registers_t *regs) {
         {
             char* buf = (char*)regs->ebx;
             int count = 0;
-            /* Read until we hit a double null-terminator (\0\0) */
             while (!(current_process_env[count] == '\0' && current_process_env[count+1] == '\0') && count < 254) {
                 buf[count] = current_process_env[count];
                 count++;
@@ -316,6 +355,50 @@ void syscall_handler(registers_t *regs) {
             buf[count] = '\0';
             buf[count+1] = '\0';
             regs->eax = count + 1;
+            break;
+        }
+
+        case 22: /* SYS_CHDIR */
+        {
+            char* path = (char*)regs->ebx;
+            char abs_path[128];
+            build_absolute_path(path, abs_path);
+            
+            vfs_node_t* node = vfs_get_node(abs_path);
+            
+            if (node && (node->flags & 0x02 || node->flags & 0x08)) {
+                task_set_cwd(abs_path);
+                regs->eax = 0;
+            } else {
+                regs->eax = -1;
+            }
+            break;
+        }
+
+        case 23: /* SYS_GETCWD */
+        {
+            char* buf = (char*)regs->ebx;
+            strcpy(buf, task_get_cwd());
+            regs->eax = 0;
+            break;
+        }
+
+        case 24: /* SYS_IOCTL */
+        {
+            int fd = (int)regs->ebx;
+            uint32_t request = regs->ecx;
+            void* argp = (void*)regs->edx;
+
+            if (fd == 0 || fd == 1 || fd == 2) {
+                /* Standard streams (stdin, stdout, stderr) point directly to the TTY */
+                regs->eax = vfs_ioctl(tty_get_vfs_node(), request, argp);
+            } 
+            else if (fd >= 3 && fd < MAX_OPEN_FILES && fd_table[fd].used) {
+                regs->eax = vfs_ioctl(fd_table[fd].node, request, argp);
+            } 
+            else {
+                regs->eax = -1;
+            }
             break;
         }
 

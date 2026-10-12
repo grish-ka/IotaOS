@@ -8,13 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "terminal.h"
-
-size_t strlen(const char* str) 
-{
-    size_t len = 0;
-    while (str[len]) len++;
-    return len;
-}
+#include "drivers/string.h" /* Add this */
 
 #define VGA_WIDTH   80
 #define VGA_HEIGHT  25

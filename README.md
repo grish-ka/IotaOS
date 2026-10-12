@@ -44,7 +44,7 @@ IotaOS is actively evolving\! Here is the current development roadmap for upcomi
    - [ ] Write initial IPC (Inter-Process Communication) syscalls for message passing.  
  - [ ] **Phase 2: The Driver Ecosystem**  
    - [ ] Implement IDE/ATA driver for disk reading and writing.  
-   - [ ] Write a read/write filesystem parser (e.g., FAT32 or ext2).  
+   - [x] Write a read/write filesystem parser (e.g., FAT32 or ext2).  
    - [ ] Move PS/2 Keyboard driver out of the kernel and into User Space.  
    - [ ] Move VGA/Terminal driver out of the kernel and into User Space.  
    - [ ] Draft initial networking/Web Driver interface.  

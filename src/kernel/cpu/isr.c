@@ -90,8 +90,6 @@ void fault_handler(registers_t *regs) {
     
 }
 
-/* We will write this in your keyboard.c next! */
-extern void keyboard_handle_interrupt(void);
 extern uint32_t timer_handler(uint32_t esp); /* <--- Updated signature */
 
 /* This handles all hardware interrupts from the PIC */
@@ -106,7 +104,7 @@ uint32_t irq_handler(uint32_t esp) {
 
     /* If it is Interrupt 33 (IRQ 1), the keyboard caused it! */
     if (regs->int_no == 33) {
-        keyboard_handle_interrupt();
+        keyboard_handle_interrupt(regs);
     }
 
     /* Send the "End of Interrupt" (EOI) signal to the PIC.

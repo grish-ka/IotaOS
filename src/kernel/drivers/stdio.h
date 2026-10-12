@@ -1,27 +1,19 @@
 /*
-
-IotaOS - stdio.h
-
-Copyright (c) 2026 grish-ka
-
-Licensed under the MIT License.
-*/
+ * IotaOS - stdio.h
+ * Copyright (c) 2026 grish-ka
+ * Licensed under the MIT License.
+ */
 
 #ifndef STDIO_H
 #define STDIO_H
 
 #include <stdarg.h>
-#include <stdint.h>
 
-void printf(const char* format, ...);
-int sprintf(char* buffer, const char* format, ...);
-
-void gets(char* buffer, int max_size);
-int atoi(const char* str);
-void sleep(uint32_t ms);
-
-/* --- NEW: SERIAL DEBUGGING SYSTEM --- */
-void init_serial(void);
-void serial_printf(const char* format, ...);
+void putchar(char c);
+void puts(const char* str);
+int printf(const char* format, ...);
+int sprintf(char* str, const char* format, ...);
+char* gets(char* str, int max_length);
+char getchar(void);
 
 #endif /* STDIO_H */

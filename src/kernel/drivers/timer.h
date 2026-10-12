@@ -18,4 +18,6 @@ uint32_t timer_handler(uint32_t esp); /* <--- Return type changed to uint32_t */
 /* Get current tick count */
 uint32_t timer_get_ticks(void);
 
+void timer_sleep(uint32_t ticks);
+
 #endif /* TIMER_H */

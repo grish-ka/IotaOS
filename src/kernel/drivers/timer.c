@@ -43,3 +43,10 @@ uint32_t timer_handler(uint32_t esp) {
 uint32_t timer_get_ticks(void) {
     return tick;
 }
+
+void timer_sleep(uint32_t ticks) {
+    uint32_t start_ticks = tick; /* Replace with your actual global tick variable */
+    while (tick < start_ticks + ticks) {
+        __asm__ volatile("sti; hlt; cli");
+    }
+}

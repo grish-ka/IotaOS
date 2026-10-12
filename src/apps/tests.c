@@ -22,8 +22,8 @@ int test_memory() {
 }
 
 int test_file_io() {
-    /* Attempt to read the ELF magic number from the shell binary */
-    FILE* f = fopen("iosh", "r");
+    /* Explicitly check the absolute path in the VFS */
+    FILE* f = fopen("/bin/iosh", "r");
     if (!f) return 0;
     
     char buf[8];
@@ -34,9 +34,11 @@ int test_file_io() {
 }
 
 int test_arguments(int argc, char* argv[]) {
-    /* Verify the shell correctly passed the execution string */
     if (argc < 1) return 0;
-    return (strcmp(argv[0], "./tests") == 0 || strcmp(argv[0], "tests") == 0);
+    /* Add "/bin/tests" as a valid argument string */
+    return (strcmp(argv[0], "./tests") == 0 || 
+            strcmp(argv[0], "tests") == 0 || 
+            strcmp(argv[0], "/bin/tests") == 0);
 }
 
 int test_environment() {
