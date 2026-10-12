@@ -21,7 +21,10 @@ int current_exit_code = 0;
 uint32_t stress_pointers[MAX_STRESS_PAGES];
 uint32_t stress_allocated = 0;
 
-uint32_t current_heap_end = 0x40000000; /* Start the heap at the 1GB virtual mark */
+uint32_t current_heap_end = 0x40000000; 
+
+/* --- ARGUMENT TRACKING --- */
+char current_process_args[256] = {0};
 
 /* --- FILE DESCRIPTOR TABLE --- */
 #define MAX_OPEN_FILES 32
@@ -56,21 +59,18 @@ void syscall_handler(registers_t *regs) {
                 __asm__ volatile("cli"); 
                 regs->eax = count; 
             } 
-            /* Handle Ramdisk Files */
             else if (fd >= 3 && fd < MAX_OPEN_FILES && fd_table[fd].used) {
                 fd_entry_t* file = &fd_table[fd];
                 int available = file->size - file->offset;
-                
-                if (count > available) count = available; /* Don't read past EOF */
+                if (count > available) count = available; 
                 
                 for (int i = 0; i < count; i++) {
                     buf[i] = file->data[file->offset + i];
                 }
-                
                 file->offset += count;
                 regs->eax = count;
             } else {
-                regs->eax = -1; /* Unsupported or invalid FD */
+                regs->eax = -1; 
             }
             break;
         }
@@ -97,30 +97,65 @@ void syscall_handler(registers_t *regs) {
             regs->ebx = pmm_get_total_block_count();
             break;
 
-        case 6: /* SYS_EXIT */
-            /* Clean up open files on exit */
+    case 6: /* SYS_EXIT */
+        {
             for (int i = 3; i < MAX_OPEN_FILES; i++) {
                 fd_table[i].used = 0;
             }
             current_exit_code = regs->ebx; 
             printf("\n[Process exited with code %d]\n", current_exit_code);
-            break;
 
+            /* Hobby OS Hack: We don't have fork() yet, so reload the shell! */
+            if (global_initrd_address != 0) {
+                uint32_t file_size = 0;
+                void* file_data = tar_get_file(global_initrd_address, "iosh", &file_size);
+                if (file_data != NULL) {
+                    elf_load_and_run(file_data, file_size);
+                }
+            }
+            break;
+        }
         case 7: /* SYS_EXEC */
+        case 11: /* SYS_SPAWN */
         {
-            char* filename = (char*)regs->ebx;
+            char* full_cmd = (char*)regs->ebx;
+            char filename[64] = {0};
+            
+            int i = 0;
+            while (full_cmd[i] != ' ' && full_cmd[i] != '\0' && i < 63) {
+                filename[i] = full_cmd[i];
+                i++;
+            }
+            
+            int j = 0;
+            while (full_cmd[i] == ' ') i++; 
+            while (full_cmd[i] != '\0' && j < 255) {
+                current_process_args[j++] = full_cmd[i++];
+            }
+            current_process_args[j] = '\0';
+
             if (global_initrd_address == 0) {
                 printf("Error: No ramdisk loaded.\n");
                 regs->eax = -1;
+                break;
+            }
+
+            uint32_t file_size = 0;
+            void* file_data = tar_get_file(global_initrd_address, filename, &file_size);
+            if (file_data == NULL) {
+                printf("Error: File '%s' not found.\n", filename);
+                regs->eax = -1;
+                break;
+            }
+
+            if (regs->eax == 7) {
+                regs->eax = elf_load_and_run(file_data, file_size);
             } else {
-                uint32_t file_size = 0;
-                void* file_data = tar_get_file(global_initrd_address, filename, &file_size);
-                if (file_data == NULL) {
-                    printf("Error: File '%s' not found.\n", filename);
-                    regs->eax = -1;
-                } else {
-                    regs->eax = elf_load_and_run(file_data, file_size);
-                }
+                elf_image_t image;
+                if (elf_load(file_data, file_size, &image) == 0) {
+                    if (create_task((void (*)(void))image.entry, image.page_directory) == 0) regs->eax = 0;
+                    else { elf_unload(&image); regs->eax = -1; }
+                } else regs->eax = -1;
             }
             break;
         }
@@ -142,34 +177,6 @@ void syscall_handler(registers_t *regs) {
         case 10: /* SYS_YIELD */
             __asm__ volatile("int $32");
             break;
-
-        case 11: /* SYS_SPAWN (BACKGROUND TASK) */
-        {
-            char* filename = (char*)regs->ebx;
-            if (global_initrd_address == 0) {
-                regs->eax = -1;
-            } else {
-                uint32_t file_size = 0;
-                void* file_data = tar_get_file(global_initrd_address, filename, &file_size);
-                if (file_data == NULL) {
-                    printf("Error: File '%s' not found.\n", filename);
-                    regs->eax = -1;
-                } else {
-                    elf_image_t image;
-                    if (elf_load(file_data, file_size, &image) == 0) {
-                        if (create_task((void (*)(void))image.entry, image.page_directory) == 0) {
-                            regs->eax = 0;
-                        } else {
-                            elf_unload(&image);
-                            regs->eax = -1;
-                        }
-                    } else {
-                        regs->eax = -1;
-                    }
-                }
-            }
-            break;
-        }
 
         case 12: /* SYS_PUTCHAR_AT */
         {
@@ -206,7 +213,7 @@ void syscall_handler(registers_t *regs) {
             terminal_clear();
             break;
 
-        case 15: /* SYS_BRK (Memory Allocation) */
+        case 15: /* SYS_BRK */
         {
             int increment = (int)regs->ebx;
             if (increment == 0) {
@@ -238,24 +245,15 @@ void syscall_handler(registers_t *regs) {
             break;
         }
 
-        case 16: /* SYS_OPEN (Open a file) */
+        case 16: /* SYS_OPEN */
         {
             char* filename = (char*)regs->ebx;
-            
-            if (global_initrd_address == 0) {
-                regs->eax = -1;
-                break;
-            }
+            if (global_initrd_address == 0) { regs->eax = -1; break; }
             
             uint32_t file_size = 0;
             void* file_data = tar_get_file(global_initrd_address, filename, &file_size);
+            if (file_data == NULL) { regs->eax = -1; break; }
             
-            if (file_data == NULL) {
-                regs->eax = -1; /* File not found */
-                break;
-            }
-            
-            /* Find an empty FD slot starting at 3 (0,1,2 are reserved for standard I/O) */
             int fd = -1;
             for (int i = 3; i < MAX_OPEN_FILES; i++) {
                 if (fd_table[i].used == 0) {
@@ -267,20 +265,32 @@ void syscall_handler(registers_t *regs) {
                     break;
                 }
             }
-            
-            regs->eax = fd; /* Returns the file descriptor integer, or -1 if the table is full */
+            regs->eax = fd; 
             break;
         }
 
-        case 17: /* SYS_CLOSE (Close a file) */
+        case 17: /* SYS_CLOSE */
         {
             int fd = (int)regs->ebx;
             if (fd >= 3 && fd < MAX_OPEN_FILES) {
                 fd_table[fd].used = 0;
-                regs->eax = 0; /* Success */
+                regs->eax = 0; 
             } else {
-                regs->eax = -1; /* Invalid FD */
+                regs->eax = -1; 
             }
+            break;
+        }
+
+        case 18: /* SYS_GET_ARGS */
+        {
+            char* buf = (char*)regs->ebx;
+            int count = 0;
+            while (current_process_args[count] != '\0') {
+                buf[count] = current_process_args[count];
+                count++;
+            }
+            buf[count] = '\0';
+            regs->eax = count;
             break;
         }
 

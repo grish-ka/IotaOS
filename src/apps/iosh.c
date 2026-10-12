@@ -9,7 +9,7 @@
 #include "iota.h"
 
 int main() {
-    printf("\nWelcome to Iota Shell (IOSH) v0.3.1!\n");
+    printf("\nWelcome to Iota Shell (IOSH) v0.4.0 (argc/argv support)!\n");
 
     char cmd[256];
 
@@ -23,7 +23,7 @@ int main() {
             printf("Available commands:\n");
             printf("  help    - Show this help message\n");
             printf("  ls      - List files in the ramdisk\n");
-            printf("  run     - Execute in foreground (e.g. './cat')\n");
+            printf("  run     - Execute in foreground (e.g. './cat test.txt')\n");
             printf("  bg      - Execute in background (e.g. './spinner &')\n");
             printf("  meminfo - Show physical memory usage information\n");
             printf("  clear   - Clear the terminal screen\n");
@@ -34,27 +34,27 @@ int main() {
             iota_ls(); 
         }
         else if (cmd[0] == '.' && cmd[1] == '/') {
-            char* filename = &cmd[2]; 
-            int len = strlen(filename);
+            char* full_command = &cmd[2]; 
+            int len = strlen(full_command);
             int run_in_background = 0;
             
-            if (len > 0 && filename[len - 1] == '&') {
+            if (len > 0 && full_command[len - 1] == '&') {
                 run_in_background = 1;
-                filename[len - 1] = '\0';
+                full_command[len - 1] = '\0';
                 len--;
-                while (len > 0 && filename[len - 1] == ' ') {
-                    filename[len - 1] = '\0';
+                while (len > 0 && full_command[len - 1] == ' ') {
+                    full_command[len - 1] = '\0';
                     len--;
                 }
             }
 
             if (run_in_background) {
                 printf("Spawning background task...\n");
-                int ret = iota_spawn(filename);
+                int ret = iota_spawn(full_command);
                 if (ret == -1) printf("IOSH Error: Failed to spawn task.\n");
             } else {
-                int ret = iota_exec(filename); 
-                if (ret == -1) printf("IOSH Error: File '%s' not found.\n", filename);
+                int ret = iota_exec(full_command); 
+                if (ret == -1) printf("IOSH Error: Command not found or failed.\n");
             }
         }
         else if (strcmp(cmd, "clear") == 0) iota_clear();

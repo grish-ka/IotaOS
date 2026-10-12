@@ -5,27 +5,24 @@
  */
 
 #include <stdio.h>
-#include <string.h>
 
-int main() {
-    char filename[64];
-    memset(filename, 0, 64);
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        printf("Usage: cat <filename>\n");
+        return 1;
+    }
 
-    printf("File to read: ");
-    gets(filename, 64);
-
-    FILE* file = fopen(filename, "r");
+    FILE* file = fopen(argv[1], "r");
     if (!file) {
-        printf("cat: %s: No such file or directory\n", filename);
+        printf("cat: %s: No such file or directory\n", argv[1]);
         return 1;
     }
 
     char buffer[64];
     size_t bytes_read;
     
-    /* Read the file in chunks and print it */
     while ((bytes_read = fread(buffer, 1, 63, file)) > 0) {
-        buffer[bytes_read] = '\0'; /* Null-terminate the chunk */
+        buffer[bytes_read] = '\0';
         printf("%s", buffer);
     }
     

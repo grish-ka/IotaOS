@@ -9,7 +9,6 @@ typedef struct block_meta {
 } block_meta_t;
 
 #define META_SIZE sizeof(struct block_meta)
-
 static void* global_base = NULL;
 
 static block_meta_t* find_free_block(block_meta_t** last, size_t size) {
@@ -22,8 +21,7 @@ static block_meta_t* find_free_block(block_meta_t** last, size_t size) {
 }
 
 static block_meta_t* request_space(block_meta_t* last, size_t size) {
-    block_meta_t* block;
-    block = iota_sbrk(0);
+    block_meta_t* block = iota_sbrk(0);
     void* request = iota_sbrk(size + META_SIZE);
     if (request == (void*)-1) return NULL;
     
@@ -47,9 +45,7 @@ void* malloc(size_t size) {
         if (!block) {
             block = request_space(last, size);
             if (!block) return NULL;
-        } else {
-            block->free = 0;
-        }
+        } else block->free = 0;
     }
     return (block + 1);
 }
@@ -65,4 +61,31 @@ void* calloc(size_t num, size_t size) {
     void* ptr = malloc(total);
     if (ptr) memset(ptr, 0, total);
     return ptr;
+}
+
+extern int main(int argc, char* argv[]);
+
+int libc_entry() {
+    char raw_args[256];
+    iota_get_args(raw_args);
+
+    int argc = 1; 
+    char* argv[16];
+    argv[0] = ""; 
+
+    char* ptr = raw_args;
+    while (*ptr != '\0' && argc < 16) {
+        while (*ptr == ' ') ptr++; 
+        if (*ptr == '\0') break;
+        
+        argv[argc++] = ptr;
+        
+        while (*ptr != ' ' && *ptr != '\0') ptr++; 
+        if (*ptr != '\0') {
+            *ptr = '\0'; 
+            ptr++;
+        }
+    }
+
+    return main(argc, argv);
 }

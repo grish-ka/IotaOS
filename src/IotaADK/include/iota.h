@@ -9,8 +9,6 @@
 
 #include <stdint.h>
 
-/* IOTA_RELOC dynamically calculates physical load addresses at runtime.
- * Mandatory for all static strings and global variables until we build Virtual Memory! */
 #define IOTA_RELOC(ptr) ({ \
     uintptr_t __base; \
     __asm__ volatile ( \
@@ -21,8 +19,6 @@
     ); \
     (typeof(&(ptr)[0]))((uintptr_t)(ptr) + __base); \
 })
-
-/* --- Syscall Wrappers --- */
 
 static inline int iota_read(int fd, void* buf, uint32_t count) {
     int ret;
@@ -77,8 +73,6 @@ static inline void iota_clear() {
     __asm__ volatile ("int $0x80" : : "a"(14) : "memory");
 }
 
-/* --- TASK MANAGEMENT SYSCALLS --- */
-
 static inline void iota_sleep(uint32_t ms) {
     __asm__ volatile ("int $0x80" : : "a"(9), "b"(ms) : "memory");
 }
@@ -106,6 +100,10 @@ static inline void* iota_sbrk(int increment) {
     void* ret;
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(15), "b"(increment) : "memory");
     return ret;
+}
+
+static inline void iota_get_args(char* buf) {
+    __asm__ volatile ("int $0x80" : : "a"(18), "b"(buf) : "memory");
 }
 
 #endif
