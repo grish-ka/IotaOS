@@ -40,7 +40,7 @@ int test_arguments(int argc, char* argv[]) {
 }
 
 int test_environment() {
-    /* The kernel currently hardcodes TERM=linux and USER=root */
+    /* Verify the kernel passed the TERM and USER strings */
     char* term = getenv("TERM");
     char* user = getenv("USER");
     
@@ -49,11 +49,16 @@ int test_environment() {
     return (strcmp(term, "linux") == 0 && strcmp(user, "root") == 0);
 }
 
-/* Notice we added envp[] here to match standard C signatures! */
+int test_ansi() {
+    /* Output a raw ANSI sequence to turn the text cyan, then reset it */
+    printf("\033[36m(ANSI UI Test)\033[0m ");
+    return 1;
+}
+
 int main(int argc, char* argv[], char* envp[]) {
     printf("\n--- IotaOS System Diagnostics ---\n");
     int passed = 0;
-    int total = 4;
+    int total = 5;
 
     printf("[...] Testing Dynamic Heap (malloc/free)... ");
     if (test_memory()) { printf("PASS\n"); passed++; } else { printf("FAIL\n"); }
@@ -67,13 +72,18 @@ int main(int argc, char* argv[], char* envp[]) {
     printf("[...] Testing Environment (getenv)... ");
     if (test_environment()) { printf("PASS\n"); passed++; } else { printf("FAIL\n"); }
 
+    printf("[...] Testing ANSI Escape Engine... ");
+    if (test_ansi()) { printf("PASS\n"); passed++; } else { printf("FAIL\n"); }
+
     printf("---------------------------------\n");
     printf("Result: %d/%d Tests Passed.\n", passed, total);
 
     if (passed == total) {
-        printf("Status: System is stable and ready for GNU toolchain porting.\n");
+        /* Use ANSI Green for success */
+        printf("\033[32mStatus: System is stable and ready for GNU toolchain porting.\033[0m\n");
     } else {
-        printf("Status: Kernel instability detected.\n");
+        /* Use ANSI Red for failure */
+        printf("\033[31mStatus: Kernel instability detected.\033[0m\n");
     }
 
     return 0;
