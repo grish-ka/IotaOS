@@ -106,4 +106,18 @@ static inline void iota_get_args(char* buf) {
     __asm__ volatile ("int $0x80" : : "a"(18), "b"(buf) : "memory");
 }
 
+static inline int iota_fork(void) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(19) : "memory");
+    return ret;
+}
+
+static inline void iota_wait(int pid) {
+    __asm__ volatile ("int $0x80" : : "a"(20), "b"(pid) : "memory");
+}
+
+static inline void iota_get_env(char* buf) {
+    __asm__ volatile ("int $0x80" : : "a"(21), "b"(buf) : "memory");
+}
+
 #endif

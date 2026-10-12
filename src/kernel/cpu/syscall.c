@@ -23,10 +23,13 @@ uint32_t stress_allocated = 0;
 
 uint32_t current_heap_end = 0x40000000; 
 
-/* --- ARGUMENT TRACKING --- */
 char current_process_args[256] = {0};
 
-/* --- FILE DESCRIPTOR TABLE --- */
+/* --- ENVIRONMENT VARIABLES --- 
+ * We store multiple null-terminated strings, and mark the end of the 
+ * entire list with a double null-terminator (\0\0). */
+char current_process_env[256] = "TERM=linux\0USER=root\0";
+
 #define MAX_OPEN_FILES 32
 typedef struct {
     uint8_t used;
@@ -97,24 +100,18 @@ void syscall_handler(registers_t *regs) {
             regs->ebx = pmm_get_total_block_count();
             break;
 
-    case 6: /* SYS_EXIT */
+        case 6: /* SYS_EXIT */
         {
             for (int i = 3; i < MAX_OPEN_FILES; i++) {
                 fd_table[i].used = 0;
             }
             current_exit_code = regs->ebx; 
-            printf("\n[Process exited with code %d]\n", current_exit_code);
+            printf("\n[Process %d exited with code %d]\n", current_task, current_exit_code);
 
-            /* Hobby OS Hack: We don't have fork() yet, so reload the shell! */
-            if (global_initrd_address != 0) {
-                uint32_t file_size = 0;
-                void* file_data = tar_get_file(global_initrd_address, "iosh", &file_size);
-                if (file_data != NULL) {
-                    elf_load_and_run(file_data, file_size);
-                }
-            }
+            task_exit();
             break;
         }
+
         case 7: /* SYS_EXEC */
         case 11: /* SYS_SPAWN */
         {
@@ -128,9 +125,9 @@ void syscall_handler(registers_t *regs) {
             }
             
             int j = 0;
-            while (full_cmd[i] == ' ') i++; 
-            while (full_cmd[i] != '\0' && j < 255) {
-                current_process_args[j++] = full_cmd[i++];
+            while (full_cmd[j] != '\0' && j < 255) {
+                current_process_args[j] = full_cmd[j];
+                j++;
             }
             current_process_args[j] = '\0';
 
@@ -291,6 +288,34 @@ void syscall_handler(registers_t *regs) {
             }
             buf[count] = '\0';
             regs->eax = count;
+            break;
+        }
+
+        case 19: /* SYS_FORK */
+        {
+            regs->eax = task_fork(regs);
+            break;
+        }
+
+        case 20: /* SYS_WAIT */
+        {
+            task_wait((int)regs->ebx);
+            regs->eax = 0;
+            break;
+        }
+
+        case 21: /* SYS_GET_ENV */
+        {
+            char* buf = (char*)regs->ebx;
+            int count = 0;
+            /* Read until we hit a double null-terminator (\0\0) */
+            while (!(current_process_env[count] == '\0' && current_process_env[count+1] == '\0') && count < 254) {
+                buf[count] = current_process_env[count];
+                count++;
+            }
+            buf[count] = '\0';
+            buf[count+1] = '\0';
+            regs->eax = count + 1;
             break;
         }
 

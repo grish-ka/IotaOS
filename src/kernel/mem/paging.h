@@ -23,6 +23,9 @@ void vmm_map_page(uint32_t* dir, uint32_t vaddr, uint32_t paddr, uint32_t flags)
 /* Create a brand new address space (cloning the kernel's base mappings) */
 uint32_t* vmm_create_address_space(void);
 
+/* Clone an existing user address space entirely */
+uint32_t* vmm_clone_directory(uint32_t* current_dir);
+
 /* Switch the CPU to a new page directory */
 void vmm_switch_directory(uint32_t* dir);
 

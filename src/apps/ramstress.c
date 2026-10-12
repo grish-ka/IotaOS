@@ -8,7 +8,6 @@
 #include <string.h>
 #include "iota.h"
 
-/* Helper to convert a string to an integer */
 int atoi(const char* str) {
     int res = 0;
     while (*str >= '0' && *str <= '9') {
@@ -18,24 +17,23 @@ int atoi(const char* str) {
     return res;
 }
 
-int main() {
-    char buf[32];
-    memset(buf, 0, 32);
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        printf("Usage: ramstress <MB>\n");
+        return 1;
+    }
 
-    printf("--- RAM Stress Test ---\n");
-    printf("Enter amount to allocate (MB): ");
-    gets(buf, 32);
-
-    uint32_t mb = atoi(buf);
+    uint32_t mb = atoi(argv[1]);
     if (mb == 0) return 0;
 
-    printf("Allocating RAM...\n");
+    printf("--- RAM Stress Test ---\n");
+    printf("Allocating %d MB of RAM...\n", mb);
     iota_stress_ram(1, mb);
 
     printf("Done! Background 'meminfo' should now drop.\n");
     printf("Type any key and press ENTER to abort/free...\n");
     
-    /* Wait for user input to abort */
+    char buf[32];
     memset(buf, 0, 32);
     gets(buf, 32);
 

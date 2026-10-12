@@ -63,15 +63,28 @@ void* calloc(size_t num, size_t size) {
     return ptr;
 }
 
-extern int main(int argc, char* argv[]);
+extern int main(int argc, char* argv[], char* envp[]);
+
+/* Global environment array */
+char* environ[16];
+
+char* getenv(const char* name) {
+    if (!name) return NULL;
+    int len = strlen(name);
+    for (int i = 0; environ[i] != NULL; i++) {
+        if (strncmp(environ[i], name, len) == 0 && environ[i][len] == '=') {
+            return environ[i] + len + 1;
+        }
+    }
+    return NULL;
+}
 
 int libc_entry() {
     char raw_args[256];
     iota_get_args(raw_args);
 
-    int argc = 1; 
+    int argc = 0; 
     char* argv[16];
-    argv[0] = ""; 
 
     char* ptr = raw_args;
     while (*ptr != '\0' && argc < 16) {
@@ -87,5 +100,23 @@ int libc_entry() {
         }
     }
 
-    return main(argc, argv);
+    if (argc == 0) {
+        argv[0] = "";
+        argc = 1;
+    }
+
+    /* --- ENVP PARSING --- */
+    char raw_env[256];
+    iota_get_env(raw_env);
+    
+    int envc = 0;
+    char* eptr = raw_env;
+    while (*eptr != '\0' && envc < 15) {
+        environ[envc++] = eptr;
+        while (*eptr != '\0') eptr++; /* Seek to the null byte of this string */
+        eptr++; /* Skip over the null byte to the next string */
+    }
+    environ[envc] = NULL; /* POSIX requires the final pointer in the array to be NULL */
+
+    return main(argc, argv, environ);
 }

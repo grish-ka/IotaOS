@@ -7,4 +7,8 @@ void* malloc(size_t size);
 void free(void* ptr);
 void* calloc(size_t num, size_t size);
 
+/* POSIX Environment */
+char* getenv(const char* name);
+extern char* environ[];
+
 #endif

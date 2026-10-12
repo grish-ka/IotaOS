@@ -9,7 +9,7 @@
 #include "iota.h"
 
 int main() {
-    printf("\nWelcome to Iota Shell (IOSH) v0.4.0 (argc/argv support)!\n");
+    printf("\nWelcome to Iota Shell (IOSH) v0.5.0 (POSIX Forking)!\n");
 
     char cmd[256];
 
@@ -48,13 +48,24 @@ int main() {
                 }
             }
 
-            if (run_in_background) {
-                printf("Spawning background task...\n");
-                int ret = iota_spawn(full_command);
-                if (ret == -1) printf("IOSH Error: Failed to spawn task.\n");
+            /* --- THE REAL POSIX SHELL MAGIC --- */
+            int pid = iota_fork();
+
+            if (pid == 0) {
+                /* We are the child process. Transform into the new app! */
+                iota_exec(full_command); 
+                printf("IOSH Error: Command not found.\n");
+                iota_exit(1); 
+            } else if (pid > 0) {
+                /* We are the parent shell. */
+                if (run_in_background) {
+                    printf("Spawning background task (PID %d)...\n", pid);
+                } else {
+                    /* Wait for the child to finish before showing the prompt again */
+                    iota_wait(pid);
+                }
             } else {
-                int ret = iota_exec(full_command); 
-                if (ret == -1) printf("IOSH Error: Command not found or failed.\n");
+                printf("IOSH Error: fork() failed.\n");
             }
         }
         else if (strcmp(cmd, "clear") == 0) iota_clear();

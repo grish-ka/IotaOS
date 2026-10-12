@@ -6,12 +6,12 @@
 
 #include "task.h"
 #include "../mem/pmm.h"
-#include "../mem/paging.h" /* <--- Bring in the VMM! */
+#include "../mem/paging.h" 
 
 typedef struct {
     uint32_t esp;
-    uint32_t* page_directory; /* <--- NEW: Track the memory universe */
-    uint8_t active;
+    uint32_t* page_directory; 
+    volatile uint8_t active; /* FIX: Force the CPU to read from RAM every time */
 } task_t;
 
 #define MAX_TASKS 16
@@ -26,7 +26,6 @@ static void task_returned(void) {
 }
 
 void task_init(void) {
-    /* Task 0 is the Kernel/Shell. It lives in the master directory! */
     tasks[0].active = 1; 
     tasks[0].page_directory = kernel_directory; 
     task_count = 1;
@@ -61,22 +60,19 @@ int create_task(void (*entry)(), uint32_t* page_dir) {
     *(--stack) = 0; /* Dummy DS */
 
     tasks[task_count].esp = (uint32_t)stack;
-    tasks[task_count].page_directory = page_dir; /* Save the memory space! */
+    tasks[task_count].page_directory = page_dir; 
     tasks[task_count].active = 1;
     task_count++;
     return 0;
 }
 
 uint32_t task_schedule(uint32_t current_esp) {
-    /* 1. Freeze! Save the current task's state */
     tasks[current_task].esp = current_esp;
     
-    /* NEW: Auto-track the current memory universe! */
     uint32_t cr3;
     __asm__ volatile("mov %%cr3, %0" : "=r"(cr3));
     tasks[current_task].page_directory = (uint32_t*)cr3;
 
-    /* 2. Round-Robin Scheduling */
     for (int checked = 0; checked < task_count; checked++) {
         current_task++;
         if (current_task >= task_count) current_task = 0;
@@ -87,4 +83,49 @@ uint32_t task_schedule(uint32_t current_esp) {
         }
     }
     return current_esp;
+}
+
+int task_fork(registers_t *regs) {
+    if (task_count >= MAX_TASKS) return -1;
+
+    uint32_t parent_esp = (uint32_t)regs;
+    uint32_t parent_stack_base = parent_esp & ~0xFFF;
+
+    uint32_t new_stack = (uint32_t)pmm_alloc_block();
+    if (!new_stack) return -1;
+
+    uint8_t* src = (uint8_t*)parent_stack_base;
+    uint8_t* dst = (uint8_t*)new_stack;
+    for(int i = 0; i < 4096; i++) dst[i] = src[i];
+
+    uint32_t child_esp = new_stack + (parent_esp & 0xFFF);
+
+    registers_t* child_regs = (registers_t*)child_esp;
+    child_regs->eax = 0;
+
+    uint32_t cr3;
+    __asm__ volatile("mov %%cr3, %0" : "=r"(cr3));
+    uint32_t* child_dir = vmm_clone_directory((uint32_t*)cr3);
+
+    int child_pid = task_count;
+    tasks[child_pid].esp = child_esp;
+    tasks[child_pid].page_directory = child_dir;
+    tasks[child_pid].active = 1;
+    task_count++;
+
+    return child_pid;
+}
+
+void task_exit(void) {
+    tasks[current_task].active = 0;
+    __asm__ volatile ("int $32");
+}
+
+void task_wait(int pid) {
+    if (pid < 0 || pid >= MAX_TASKS) return;
+    
+    while (tasks[pid].active) {
+        /* FIX: Add the memory clobber so GCC knows RAM might change during the interrupt */
+        __asm__ volatile ("int $32" : : : "memory"); 
+    }
 }
