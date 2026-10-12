@@ -36,6 +36,18 @@ static inline int iota_write(int fd, const void* buf, uint32_t count) {
     return ret;
 }
 
+static inline int iota_open(const char* filename) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(16), "b"(filename) : "memory");
+    return ret;
+}
+
+static inline int iota_close(int fd) {
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(17), "b"(fd) : "memory");
+    return ret;
+}
+
 static inline void iota_ls() {
     __asm__ volatile ("int $0x80" : : "a"(8) : "memory");
 }

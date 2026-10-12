@@ -34,8 +34,8 @@ LIBC_SOURCES = $(wildcard $(LIBC_DIR)/src/*.c)
 LIBC_OBJECTS = $(patsubst $(LIBC_DIR)/src/%.c, $(BUILD_DIR)/libc_%.o, $(LIBC_SOURCES))
 
 # CHANGED: Output .elf extensions instead of .ib
-APP_BINARIES = $(patsubst $(APPS_DIR)/%.s, $(BUILD_DIR)/initrd_root/%.elf, \
-		$(patsubst $(APPS_DIR)/%.c, $(BUILD_DIR)/initrd_root/%.elf, $(APP_SOURCES)))
+APP_BINARIES = $(patsubst $(APPS_DIR)/%.s, $(BUILD_DIR)/initrd_root/%, \
+		$(patsubst $(APPS_DIR)/%.c, $(BUILD_DIR)/initrd_root/%, $(APP_SOURCES)))
 
 all: $(BUILD_DIR)/IotaOS $(BUILD_DIR)/libc.a $(APP_BINARIES)
 
@@ -58,12 +58,13 @@ $(BUILD_DIR)/libc_%.o: $(LIBC_DIR)/src/%.c
 
 # --- C APP BUILD ---
 # CHANGED: Target .elf and link directly into the ramdisk directory
-$(BUILD_DIR)/initrd_root/%.elf: $(APPS_DIR)/%.c $(ADK_DIR)/lib/crt0.s $(ADK_DIR)/lib/linker.ld $(BUILD_DIR)/libc.a
+$(BUILD_DIR)/initrd_root/%: $(APPS_DIR)/%.c $(ADK_DIR)/lib/crt0.s $(ADK_DIR)/lib/linker.ld $(BUILD_DIR)/libc.a
 	@mkdir -p $(BUILD_DIR)/initrd_root
 	@echo "Building C App using ADK: $<"
 	$(AS) $(ADK_DIR)/lib/crt0.s -o $(BUILD_DIR)/crt0.o
 	$(CC) -c $< -o $(BUILD_DIR)/$*.o $(CFLAGS) -I$(ADK_DIR)/include -I$(LIBC_DIR)/include -fno-asynchronous-unwind-tables
 	$(LD) -m elf_i386 -T $(ADK_DIR)/lib/linker.ld -o $@ $(BUILD_DIR)/crt0.o $(BUILD_DIR)/$*.o -L$(BUILD_DIR) -lc
+
 run: all
 	@mkdir -p $(BUILD_DIR)/iso/boot/grub
 	@mkdir -p $(BUILD_DIR)/initrd_root

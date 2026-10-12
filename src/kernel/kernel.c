@@ -101,7 +101,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
     );
 
     uint32_t sh_file_size = 0;
-    void* sh_file = tar_get_file(global_initrd_address, "iosh.elf", &sh_file_size);
+    void* sh_file = tar_get_file(global_initrd_address, "iosh", &sh_file_size);
     if (sh_file) {
         int exit_code = elf_load_and_run(sh_file, sh_file_size);
 

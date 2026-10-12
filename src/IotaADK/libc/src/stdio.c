@@ -1,6 +1,7 @@
 #include "stdio.h"
 #include "iota.h"
 #include "string.h"
+#include "stdlib.h"
 
 static int int_to_string(int num, int base, char* buffer) {
     if (num == 0) {
@@ -94,4 +95,38 @@ int sprintf(char *buffer, const char* format, ...) {
     buffer[buf_idx] = '\0';
     va_end(args);
     return buf_idx;
+}
+
+FILE* fopen(const char* filename, const char* mode) {
+    /* For now, we ignore the 'mode' string because the TAR ramdisk is read-only */
+    int fd = iota_open(filename);
+    if (fd < 0) return NULL;
+    
+    FILE* file = (FILE*)malloc(sizeof(FILE));
+    if (!file) {
+        iota_close(fd);
+        return NULL;
+    }
+    
+    file->fd = fd;
+    return file;
+}
+
+size_t fread(void* ptr, size_t size, size_t nmemb, FILE* stream) {
+    if (!stream || !ptr) return 0;
+    
+    int bytes_to_read = size * nmemb;
+    int bytes_read = iota_read(stream->fd, ptr, bytes_to_read);
+    
+    if (bytes_read <= 0) return 0;
+    return bytes_read / size; /* Return number of items successfully read */
+}
+
+int fclose(FILE* stream) {
+    if (!stream) return -1;
+    
+    int res = iota_close(stream->fd);
+    free(stream); /* Return the FILE struct memory to the user-space heap */
+    
+    return res;
 }

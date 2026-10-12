@@ -23,6 +23,17 @@ uint32_t stress_allocated = 0;
 
 uint32_t current_heap_end = 0x40000000; /* Start the heap at the 1GB virtual mark */
 
+/* --- FILE DESCRIPTOR TABLE --- */
+#define MAX_OPEN_FILES 32
+typedef struct {
+    uint8_t used;
+    uint8_t* data;
+    uint32_t size;
+    uint32_t offset;
+} fd_entry_t;
+
+fd_entry_t fd_table[MAX_OPEN_FILES] = {0};
+
 void syscall_handler(registers_t *regs) {
     switch (regs->eax) {
         case 0: /* SYS_PANIC */
@@ -44,8 +55,22 @@ void syscall_handler(registers_t *regs) {
                 gets(buf, count); 
                 __asm__ volatile("cli"); 
                 regs->eax = count; 
+            } 
+            /* Handle Ramdisk Files */
+            else if (fd >= 3 && fd < MAX_OPEN_FILES && fd_table[fd].used) {
+                fd_entry_t* file = &fd_table[fd];
+                int available = file->size - file->offset;
+                
+                if (count > available) count = available; /* Don't read past EOF */
+                
+                for (int i = 0; i < count; i++) {
+                    buf[i] = file->data[file->offset + i];
+                }
+                
+                file->offset += count;
+                regs->eax = count;
             } else {
-                regs->eax = -1; 
+                regs->eax = -1; /* Unsupported or invalid FD */
             }
             break;
         }
@@ -73,6 +98,10 @@ void syscall_handler(registers_t *regs) {
             break;
 
         case 6: /* SYS_EXIT */
+            /* Clean up open files on exit */
+            for (int i = 3; i < MAX_OPEN_FILES; i++) {
+                fd_table[i].used = 0;
+            }
             current_exit_code = regs->ebx; 
             printf("\n[Process exited with code %d]\n", current_exit_code);
             break;
@@ -205,6 +234,52 @@ void syscall_handler(registers_t *regs) {
                 
                 current_heap_end = new_break;
                 regs->eax = old_break; 
+            }
+            break;
+        }
+
+        case 16: /* SYS_OPEN (Open a file) */
+        {
+            char* filename = (char*)regs->ebx;
+            
+            if (global_initrd_address == 0) {
+                regs->eax = -1;
+                break;
+            }
+            
+            uint32_t file_size = 0;
+            void* file_data = tar_get_file(global_initrd_address, filename, &file_size);
+            
+            if (file_data == NULL) {
+                regs->eax = -1; /* File not found */
+                break;
+            }
+            
+            /* Find an empty FD slot starting at 3 (0,1,2 are reserved for standard I/O) */
+            int fd = -1;
+            for (int i = 3; i < MAX_OPEN_FILES; i++) {
+                if (fd_table[i].used == 0) {
+                    fd_table[i].used = 1;
+                    fd_table[i].data = (uint8_t*)file_data;
+                    fd_table[i].size = file_size;
+                    fd_table[i].offset = 0;
+                    fd = i;
+                    break;
+                }
+            }
+            
+            regs->eax = fd; /* Returns the file descriptor integer, or -1 if the table is full */
+            break;
+        }
+
+        case 17: /* SYS_CLOSE (Close a file) */
+        {
+            int fd = (int)regs->ebx;
+            if (fd >= 3 && fd < MAX_OPEN_FILES) {
+                fd_table[fd].used = 0;
+                regs->eax = 0; /* Success */
+            } else {
+                regs->eax = -1; /* Invalid FD */
             }
             break;
         }
