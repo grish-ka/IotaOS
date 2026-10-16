@@ -59,9 +59,16 @@ uint32_t stress_allocated = 0;
 #define S_IFDIR 0040000
 #define S_IFREG 0100000
 
-/* Handed to the next program started; read once by its libc at startup */
-char current_process_args[ARGS_SIZE] = {0};
-char current_process_env[ENV_SIZE] =
+/*
+ * Staging buffers for the program being started. They are copied into the new
+ * image's own argument page (APP_ARGS_ADDR) within the same system call, so
+ * programs starting at the same time cannot see each other's arguments.
+ */
+static char current_process_args[ARGS_SIZE];
+static char current_process_env[ENV_SIZE];
+
+/* Environment for programs init starts */
+static const char default_env[] =
     "TERM=linux\0USER=root\0LOGNAME=root\0HOME=/root\0SHELL=/bin/bash\0PATH=/usr/local/bin:/usr/bin:/bin\0";
 
 static const char* cwd(void) {
@@ -146,12 +153,23 @@ static uint32_t block_length(const char* block, uint32_t max) {
     return len;
 }
 
+/* Copy the staged argv and environment into image's argument page */
+static void install_args(elf_image_t* image) {
+    uint8_t* page = (uint8_t*)vmm_get_phys(image->page_directory, APP_ARGS_ADDR);
+    uint32_t alen = block_length(current_process_args, ARGS_SIZE);
+    uint32_t elen = block_length(current_process_env, ENV_SIZE);
+    for (uint32_t k = 0; k < alen + 2; k++) page[APP_ARGS_OFFSET + k] = k < alen ? current_process_args[k] : 0;
+    for (uint32_t k = 0; k < elen + 2; k++) page[APP_ENV_OFFSET + k] = k < elen ? current_process_env[k] : 0;
+}
+
 /* Start a program as a new child task (used by init and the legacy spawn call) */
 int spawn_program(const char* path, const char* args) {
     elf_image_t image;
     if (load_program(path, &image, 0) != 0) return -1;
 
     stage_args_string(args);
+    for (uint32_t k = 0; k < sizeof(default_env); k++) current_process_env[k] = default_env[k];
+    install_args(&image);
     int pid = create_task((void (*)(void))image.entry, image.page_directory);
     if (pid < 0) {
         elf_unload(&image);
@@ -389,6 +407,11 @@ void syscall_handler(registers_t *regs) {
                 regs->eax = -E2BIG;
                 break;
             }
+            /* Same environment as the caller */
+            const char* old_env = (const char*)(APP_ARGS_ADDR + APP_ENV_OFFSET);
+            uint32_t elen = block_length(old_env, ENV_SIZE);
+            for (uint32_t k = 0; k < elen + 2; k++) current_process_env[k] = k < elen ? old_env[k] : 0;
+            install_args(&image);
             exec_image(&image, filename, node);
             break;
         }
@@ -497,8 +520,9 @@ void syscall_handler(registers_t *regs) {
         case SYS_GET_ARGS: /* ebx = buffer of ARGS_SIZE; gets the NUL-separated block */
         {
             char* buf = (char*)regs->ebx;
-            uint32_t len = block_length(current_process_args, ARGS_SIZE);
-            for (uint32_t k = 0; k < len; k++) buf[k] = current_process_args[k];
+            const char* args = (const char*)(APP_ARGS_ADDR + APP_ARGS_OFFSET);
+            uint32_t len = block_length(args, ARGS_SIZE);
+            for (uint32_t k = 0; k < len; k++) buf[k] = args[k];
             buf[len] = '\0';
             buf[len + 1] = '\0';
             regs->eax = len;
@@ -517,9 +541,10 @@ void syscall_handler(registers_t *regs) {
         case SYS_GET_ENV:
         {
             char* buf = (char*)regs->ebx;
+            const char* env = (const char*)(APP_ARGS_ADDR + APP_ENV_OFFSET);
             int count = 0;
-            while (!(current_process_env[count] == '\0' && current_process_env[count+1] == '\0') && count < ENV_SIZE - 2) {
-                buf[count] = current_process_env[count];
+            while (!(env[count] == '\0' && env[count+1] == '\0') && count < ENV_SIZE - 2) {
+                buf[count] = env[count];
                 count++;
             }
             buf[count] = '\0';
@@ -583,12 +608,16 @@ void syscall_handler(registers_t *regs) {
                 regs->eax = r;
                 break;
             }
-            r = stage_exec(args, (const char*)regs->edx);
+            /* A null environment means "keep the current one" */
+            const char* env = (const char*)regs->edx;
+            if (!env) env = (const char*)(APP_ARGS_ADDR + APP_ENV_OFFSET);
+            r = stage_exec(args, env);
             if (r != 0) {
                 elf_unload(&image);
                 regs->eax = r;
                 break;
             }
+            install_args(&image);
             exec_image(&image, path, node);
             break;
         }

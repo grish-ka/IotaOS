@@ -9,15 +9,17 @@
 
 extern char **environ;
 
-/* su [-|-l] [USER]: start USER's shell (root by default). There are no
-   passwords, so this only refuses unknown users. */
+/* su [-|-l] [-c COMMAND] [USER]: start USER's shell (root by default), or
+   run COMMAND with it. There are no passwords, so this only refuses unknown users. */
 int main(int argc, char *argv[]) {
     const char *prog = prog_name(argv[0]);
-    int login = 0, i = 1;
-    for (; i < argc && argv[i][0] == '-'; i++) {
+    int login = 0;
+    const char *command = NULL, *name = "root";
+    for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-") || !strcmp(argv[i], "-l") || !strcmp(argv[i], "--login")) login = 1;
+        else if (!strcmp(argv[i], "-c") && i + 1 < argc) command = argv[++i];
+        else if (argv[i][0] != '-') name = argv[i];
     }
-    const char *name = (i < argc) ? argv[i] : "root";
     struct passwd *pw = getpwnam(name);
     if (!pw) {
         fprintf(stderr, "%s: user %s does not exist or the user entry does not contain all the required fields\n", prog, name);
@@ -44,7 +46,7 @@ int main(int argc, char *argv[]) {
     base = base ? base + 1 : shell;
     char argv0[64];
     snprintf(argv0, sizeof(argv0), "%s%s", login ? "-" : "", base);
-    char *args[] = {argv0, NULL};
+    char *args[] = {argv0, command ? "-c" : NULL, (char *)command, NULL};
     execve(shell, args, environ);
     fprintf(stderr, "%s: failed to execute %s: %s\n", prog, shell, strerror(errno));
     return 1;

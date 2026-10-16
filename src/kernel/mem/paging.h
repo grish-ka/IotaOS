@@ -41,6 +41,10 @@ void vmm_free_address_space(uint32_t* dir);
 #define APP_STACK_TOP   0x08400000
 #define APP_STACK_PAGES 64  /* 256 KB */
 #define APP_STACK_BASE  (APP_STACK_TOP - APP_STACK_PAGES * 4096)
+/* One page under the stack holds the program's argv and environment blocks */
+#define APP_ARGS_ADDR   (APP_STACK_BASE - 4096)
+#define APP_ARGS_OFFSET 0     /* NUL-separated argv, up to 1024 bytes */
+#define APP_ENV_OFFSET  1024  /* NUL-separated environment, up to 2048 bytes */
 
 /* Switch the CPU to a new page directory */
 void vmm_switch_directory(uint32_t* dir);

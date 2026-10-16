@@ -68,7 +68,7 @@ int elf_load(void *file_data, uint32_t file_size, elf_image_t *image) {
         const Elf32_Phdr *program = &programs[i];
         if (program->p_type != PT_LOAD || program->p_memsz == 0) continue;
         if (program->p_vaddr < APP_REGION_BASE ||
-            program->p_vaddr + program->p_memsz > APP_STACK_BASE) {
+            program->p_vaddr + program->p_memsz > APP_ARGS_ADDR) {
             printf("elf_loader: Segment at 0x%x does not fit the app region!\n", program->p_vaddr);
             return -1;
         }
@@ -88,7 +88,7 @@ int elf_load(void *file_data, uint32_t file_size, elf_image_t *image) {
         copy_to_space(new_dir, program->p_vaddr, file + program->p_offset, program->p_filesz);
     }
 
-    if (map_zeroed(new_dir, APP_STACK_BASE, APP_STACK_TOP) != 0) {
+    if (map_zeroed(new_dir, APP_ARGS_ADDR, APP_STACK_TOP) != 0) {
         vmm_free_address_space(new_dir);
         return -1;
     }

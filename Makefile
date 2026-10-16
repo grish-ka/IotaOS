@@ -158,7 +158,7 @@ gnu-bash: $(BUILD_DIR)/libc.a $(BUILD_DIR)/crt0.o
 	@echo "Configuring Bash for IotaOS cross-compilation..."
 	cd $(BASH_SRC) && \
 	CC="$(CC)" \
-	CFLAGS="-O2 -DHAVE_TIMEVAL -DTERMIOS_TTY=1 -I/home/grish/prj/IotaOS/src/IotaADK/libc/include -I/home/grish/prj/IotaOS/src/IotaADK/include -ffreestanding" \
+	CFLAGS="-O2 -DHAVE_TIMEVAL -DTERMIOS_TTY=1 $(GNU_CFLAGS) -ffreestanding" \
 	LDFLAGS="-nostdlib -T $(abspath $(ADK_DIR)/lib/linker.ld) $(abspath $(BUILD_DIR)/crt0.o) $(GNU_LDFLAGS)" \
 	LIBS="-L$(abspath $(BUILD_DIR)) -lc -lgcc" \
 	CC_FOR_BUILD="gcc -std=gnu89" \

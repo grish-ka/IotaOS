@@ -39,18 +39,20 @@ jobs:
           i686-elf-gcc --version
           i686-elf-ld --version
 
+      # src/gnu is not in git: keep the downloaded Bash source between runs
+      - name: Cache GNU Bash Source
+        uses: actions/cache@v4
+        with:
+          path: src/gnu/bash-5.2.21.tar.gz
+          key: gnu-bash-5.2.21
+
       - name: Compile and Package IotaOS
         run: |
-          # 1. Build the OS binaries
-          make clean && make
-          
-          # 2. Package the Ramdisk and build the ISO (Without running QEMU)
-          mkdir -p build/iso/boot/grub
-          mkdir -p build/initrd_root
-          cp build/IotaOS build/iso/boot/IotaOS
-          cd build/initrd_root && tar -cf ../iso/boot/initrd.img * && cd ../..
-          cp grub.cfg build/iso/boot/grub/grub.cfg
-          grub-mkrescue -o build/IotaOS.iso build/iso
+          # Kernel, libc, /bin tools and Bash (downloaded, configured and
+          # cross-compiled on first use), then the root filesystem image and
+          # the bootable ISO. WITH_BASH=y answers the "compile Bash?" question.
+          make clean
+          make iso WITH_BASH=y
 
       - name: Package IotaADK
         run: |

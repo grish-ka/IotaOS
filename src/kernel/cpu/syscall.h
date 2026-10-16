@@ -87,8 +87,6 @@ typedef struct {
     uint32_t procs;
 } ksysinfo_t;
 
-extern char current_process_env[ENV_SIZE];
-
 /* Start the program at path as a child of the current task; returns its pid or -1 */
 int spawn_program(const char* path, const char* args);
 
