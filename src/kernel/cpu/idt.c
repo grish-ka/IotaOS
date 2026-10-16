@@ -13,6 +13,7 @@ struct idt_ptr idtp;
 extern void irq0(void);
 extern void irq1(void);
 extern void irq128(void);
+extern void irq129(void);
 
 /* Declare all 32 assembly wrappers so C knows they exist */
 extern void isr0(void);
@@ -112,6 +113,7 @@ void idt_install(void) {
      * The other 'E' sets the Privilege Level to 3 (Userland).
      */
     idt_set_gate(128, (uint32_t)irq128, current_cs, 0xEE);
+    idt_set_gate(129, (uint32_t)irq129, current_cs, 0x8E); /* task_yield() */
 
     /* Load the IDT into the CPU */
     __asm__ volatile("lidt %0" : : "m"(idtp));

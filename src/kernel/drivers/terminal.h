@@ -63,5 +63,7 @@ void terminal_putentryat(char c, uint8_t color, size_t x, size_t y);
 void terminal_putchar(char c);
 void terminal_write(const char* data, size_t size);
 void terminal_writestring(const char* data);
+/* Move the blinking hardware cursor to the current output position */
+void terminal_flush_cursor(void);
 
 #endif /* TERMINAL_H */

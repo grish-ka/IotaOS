@@ -6,5 +6,5 @@
 
 build
 *.o
-
+src/gnu
 os_dump.txt

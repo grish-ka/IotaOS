@@ -1,0 +1,6 @@
+
+Welcome to IotaOS 1.0 (GNU Bash 5.2.21, i686)
+
+ * Everything lives in RAM: changes are lost when you power off.
+ * Try: ls -l /bin, ps, free -h, uname -a, cat /etc/os-release
+

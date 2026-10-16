@@ -9,6 +9,7 @@
 #include "drivers/keyboard.h"
 #include "drivers/system.h"
 #include "isr.h"
+#include "task.h"
 
 /* A master array of error messages so we don't have to write 32 print statements */
 char *exception_messages[] = {
@@ -45,6 +46,16 @@ char *exception_messages[] = {
     "Reserved (If you are here you should be very scared or intel added a new CPU with more than 21 exceptions, make a github issue!)"
 };
 
+static void panic_write_hex(const char *label, uint32_t value) {
+    const char *digits = "0123456789ABCDEF";
+    char buf[11] = "0x";
+    for (int i = 0; i < 8; i++) buf[2 + i] = digits[(value >> (28 - 4 * i)) & 0xF];
+    buf[10] = '\0';
+    terminal_writestring(label);
+    terminal_writestring(buf);
+    terminal_writestring("\n");
+}
+
 /* The master function that all 32 assembly wrappers will call */
 void fault_handler(registers_t *regs) {
     /* Set our beautiful Blue Screen of Death colors! */
@@ -62,7 +73,17 @@ void fault_handler(registers_t *regs) {
     } else {
         terminal_writestring("Unknown Exception");
     }
-    terminal_writestring("\n The system has been halted to prevent damage.\n");
+    terminal_writestring("\n");
+    if (regs->int_no == 14) {
+        uint32_t cr2;
+        __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
+        panic_write_hex(" Fault address (CR2): ", cr2);
+    }
+    panic_write_hex(" EIP:        ", regs->eip);
+    panic_write_hex(" Error code: ", regs->err_code);
+    panic_write_hex(" ESP:        ", regs->esp);
+    panic_write_hex(" User ESP:   ", regs->useresp);
+    terminal_writestring(" The system has been halted to prevent damage.\n");
     terminal_writestring("Press F1 to reboot...\n");
     
     /* --- HARDWARE POLLING FOR F1 --- */
@@ -105,6 +126,13 @@ uint32_t irq_handler(uint32_t esp) {
     /* If it is Interrupt 33 (IRQ 1), the keyboard caused it! */
     if (regs->int_no == 33) {
         keyboard_handle_interrupt(regs);
+        /* Ctrl-C may have just terminated the interrupted task */
+        if (!task_current_active()) esp = task_schedule(esp);
+    }
+
+    /* task_yield(): a software interrupt, so no tick and no EOI */
+    if (regs->int_no == 129) {
+        return task_schedule(esp);
     }
 
     /* Send the "End of Interrupt" (EOI) signal to the PIC.

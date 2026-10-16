@@ -21,26 +21,40 @@
 #include "multiboot.h"
 #include "fs/tar.h"
 #include "fs/vfs.h"
+#include "fs/file.h"
+#include "cpu/syscall.h"
+#include "drivers/rtc.h"
+#include "drivers/devices.h"
 
 uint32_t global_initrd_address = 0;
 
-vfs_node_t dev_root_node;
-struct dirent dev_dirent;
+/* Programs init tries, in order, for the console session */
+static const char* const login_programs[][2] = {
+    {"/bin/login", "login"},
+    {"/bin/bash", "-bash"},
+    {"/bin/iosh", "iosh"},
+};
 
-static struct dirent *dev_readdir(vfs_node_t *node, uint32_t index) {
-    (void)node;
-    if (index == 0) {
-        strcpy(dev_dirent.name, "tty");
-        dev_dirent.ino = 0;
-        return &dev_dirent;
-    }
-    return NULL;
+static void boot_ok(const char* msg) {
+    printf("[  \033[32mOK\033[0m  ] %s\n", msg);
 }
 
-static vfs_node_t *dev_finddir(vfs_node_t *node, char *name) {
-    (void)node;
-    if (strcmp(name, "tty") == 0) return tty_get_vfs_node();
-    return NULL;
+/* Task 0 becomes init: keep a login session running on the console forever */
+static void run_init(void) {
+    for (;;) {
+        int pid = -1;
+        /* No preemption while the child's task slot is half built */
+        __asm__ volatile("cli");
+        for (unsigned i = 0; i < sizeof(login_programs) / sizeof(login_programs[0]) && pid < 0; i++) {
+            pid = spawn_program(login_programs[i][0], login_programs[i][1]);
+        }
+        if (pid >= 0) task_set_session_leader(pid);
+        __asm__ volatile("sti");
+        if (pid < 0) panic("init: no login program or shell found in /bin");
+
+        int status;
+        task_waitpid(pid, &status, 0);
+    }
 }
 
 void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
@@ -68,9 +82,6 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
             multiboot_module_t* module = (multiboot_module_t*)mb_info->mods_addr;
             global_initrd_address = module->mod_start;
             bitmap_loc = (module->mod_end + 4095) & ~4095;
-            
-            vfs_init();
-            vfs_mount("/bin", tar_mount(global_initrd_address));
         } else {
             panic("Error: GRUB reports 0 modules loaded.\n");
         }
@@ -78,12 +89,12 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         panic("Error: Magic number mismatch! Check boot.s pushes.\n");
     }
     
-    /* Initialize TTY and mount the virtual /dev directory */
-    tty_init();
-    dev_root_node.flags = FS_DIRECTORY;
-    dev_root_node.readdir = &dev_readdir;
-    dev_root_node.finddir = &dev_finddir;
-    vfs_mount("/dev", &dev_root_node);
+    /*
+     * All of physical RAM is identity-mapped into every address space, so it
+     * must stay below the per-process heap at TASK_HEAP_BASE (1 GB); memory
+     * above that is not used.
+     */
+    if (total_memory > TASK_HEAP_BASE) total_memory = TASK_HEAP_BASE;
 
     pic_remap();
     idt_install();
@@ -95,6 +106,9 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
     first_free = (first_free + 4095) & ~4095;
     if (first_free < 0x400000) first_free = 0x400000;
     for (uint32_t i = first_free; i < (total_memory & ~4095); i += 4096) {
+        /* Never hand out the frames behind the per-process program region:
+           while a program runs, those addresses show its code and stack */
+        if (i >= APP_REGION_BASE && i < APP_STACK_TOP) continue;
         pmm_mark_free(i);
     }
 
@@ -103,37 +117,35 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
     timer_init(100);
     __asm__ volatile("sti");
 
-    terminal_writestring("Hello, kernel World!\n");
-    terminal_writestring("This is IotaOS, a simple 32-bit operating system kernel written in C.\n\n");
+    rtc_init();
 
-    printf(
-        "  ___     _        ___  ____  \n"
-        " |_ _|___ | |_ __ _ / _ \\/ ___| \n"
-        "  | |/ _ \\| __/ _` | | | \\___ \\ \n"
-        "  | | (_) | || (_| | |_| |___) |\n"
-        " |___\\___/ \\__\\__,_|\\___/|____/ \n\n"
-    );
+    printf("IotaOS 1.0.0 (i686) - %d MB RAM\n\n", total_memory / 1024 / 1024);
+    boot_ok("Initialized memory manager and paging");
 
-    vfs_node_t* sh_node = vfs_get_node("bin/iosh");
-    if (sh_node) {
-        uint32_t pages_needed = (sh_node->size + 4095) / 4096;
-        uint8_t* temp_buffer = (uint8_t*)pmm_alloc_blocks(pages_needed);
-        vfs_read(sh_node, 0, sh_node->size, temp_buffer);
-        
-        int exit_code = elf_load_and_run(temp_buffer, sh_node->size);
+    /* Root filesystem: the ramdisk unpacked into a writable in-memory tree */
+    vfs_init();
+    int entries = tar_load(global_initrd_address);
+    char msg[80];
+    sprintf(msg, "Mounted root filesystem (%d entries from initrd)", entries);
+    boot_ok(msg);
 
-        for (uint32_t p = 0; p < pages_needed; p++) {
-            pmm_free_block(temp_buffer + (p * 4096));
-        }
+    vfs_node_t* console = devices_init();
+    vfs_node_t* tmp = vfs_mkdir_p("/tmp");
+    if (tmp) tmp->mode = 01777;
+    vfs_mkdir_p("/root");
+    vfs_mkdir_p("/home");
+    boot_ok("Created device nodes in /dev");
 
-        if (exit_code != 0) {
-            char panic_msg[64];
-            sprintf(panic_msg, "The Shell crashed unexpectedly (exit code %d)!", exit_code);
-            panic(panic_msg);
-        }
-    } else {
-        panic("Critical Error: bin/iosh not found in VFS!");
+    /* stdin, stdout and stderr of init (and everything it starts) are the console */
+    fd_table_t* fds = task_get_fds();
+    for (int fd = 0; fd < 3; fd++) {
+        file_t* f = file_open_node(console, O_RDWR);
+        fd_install(fds, f, fd);
     }
+    boot_ok("Started console on /dev/tty1");
+    printf("\n");
+
+    run_init();
 
     shutdown();
 }

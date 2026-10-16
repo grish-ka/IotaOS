@@ -34,6 +34,7 @@ void timer_init(uint32_t frequency) {
 /* This is called by your main IRQ handler in isr.c */
 uint32_t timer_handler(uint32_t esp) {
     tick++;
+    task_account_tick();
     
     /* Ask the scheduler what task to run next! */
     return task_schedule(esp);
@@ -47,6 +48,8 @@ uint32_t timer_get_ticks(void) {
 void timer_sleep(uint32_t ticks) {
     uint32_t start_ticks = tick; /* Replace with your actual global tick variable */
     while (tick < start_ticks + ticks) {
-        __asm__ volatile("sti; hlt; cli");
+        task_cpu_idle = 1;
+        __asm__ volatile("sti; hlt; cli" : : : "memory");
+        task_cpu_idle = 0;
     }
 }

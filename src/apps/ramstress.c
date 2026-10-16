@@ -6,16 +6,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "iota.h"
-
-int atoi(const char* str) {
-    int res = 0;
-    while (*str >= '0' && *str <= '9') {
-        res = res * 10 + (*str - '0');
-        str++;
-    }
-    return res;
-}
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {

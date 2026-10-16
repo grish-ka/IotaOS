@@ -99,6 +99,14 @@ irq1:
     pushl $33       /* IDT Entry 33 */
     jmp irq_common_stub
 
+/* Voluntary reschedule ('int $0x81'): like the timer, minus the tick and EOI */
+.global irq129
+irq129:
+    cli
+    pushl $0
+    pushl $129
+    jmp irq_common_stub
+
 .global irq128
 .extern syscall_handler
 
@@ -140,6 +148,15 @@ irq_common_stub:
     /* ---> TASK SWITCH MAGIC! <--- */
     /* Update the CPU stack pointer to wherever the new task is! */
     movl %eax, %esp
+
+    /* Load the new task's page directory now that ESP points at its stack.
+       Nothing may touch the stack between the two moves. */
+    movl scheduler_next_cr3, %ecx
+    testl %ecx, %ecx
+    jz 1f
+    movl $0, scheduler_next_cr3
+    movl %ecx, %cr3
+1:
 
     /* Clean up the dummy zero on the NEW stack! */
     addl $4, %esp

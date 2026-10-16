@@ -1,0 +1,15 @@
+# Termcap entries for the IotaOS VGA console (80x25, ANSI/Linux-like)
+linux|IotaOS console:\
+	:am:bs:mi:ms:xn:\
+	:co#80:li#25:it#8:\
+	:cl=\E[H\E[2J:cd=\E[J:ce=\E[K:\
+	:cm=\E[%i%d;%dH:ho=\E[H:cr=\r:\
+	:le=^H:nd=\E[C:up=\E[A:do=^J:\
+	:LE=\E[%dD:RI=\E[%dC:UP=\E[%dA:DO=\E[%dB:\
+	:dc=\E[P:DC=\E[%dP:ic=\E[@:IC=\E[%d@:al=\E[L:dl=\E[M:AL=\E[%dL:DL=\E[%dM:\
+	:md=\E[1m:me=\E[0m:mr=\E[7m:so=\E[7m:se=\E[27m:\
+	:sc=\E7:rc=\E8:ta=^I:bl=^G:\
+	:kb=^H:kl=\E[D:kr=\E[C:ku=\E[A:kd=\E[B:\
+	:kh=\E[H:@7=\E[F:kD=\E[3~:kI=\E[2~:kP=\E[5~:kN=\E[6~:
+ansi|vt100|xterm|IotaOS console (alias):\
+	:tc=linux:

@@ -1,4 +1,4 @@
-/* 
+/*
  * IotaOS - tar.c
  * Copyright (c) 2026 grish-ka
  * Licensed under the MIT License.
@@ -8,12 +8,6 @@
 #include "fs/vfs.h"
 #include "drivers/stdio.h"
 #include "drivers/string.h"
-
-/* Pre-allocate space for 64 files in our ramdisk */
-vfs_node_t initrd_nodes[64];
-int initrd_file_count = 0;
-struct dirent initrd_dirent;
-vfs_node_t initrd_root_node;
 
 static uint32_t octal_string_to_int(const char *str, int size) {
     uint32_t result = 0;
@@ -25,126 +19,80 @@ static uint32_t octal_string_to_int(const char *str, int size) {
     return result;
 }
 
-/* VFS Read Hook: Reads data from a TAR file node */
-static uint32_t tar_read(vfs_node_t *node, uint32_t offset, uint32_t size, uint8_t *buffer) {
-    tar_header_t *header = (tar_header_t *)node->impl;
-    uint32_t file_size = node->size;
-    
-    if (offset >= file_size) return 0;
-    if (offset + size > file_size) size = file_size - offset;
-    
-    uint8_t *file_data = (uint8_t *)((uint32_t)header + 512);
-    for (uint32_t i = 0; i < size; i++) {
-        buffer[i] = file_data[offset + i];
-    }
-    
-    return size;
+/* Join the ustar prefix and name fields, dropping a leading "./" and trailing "/" */
+static void entry_path(const tar_header_t* header, char* out) {
+    int o = 0;
+    out[o++] = '/';
+    for (int i = 0; i < 155 && header->prefix[i]; i++) out[o++] = header->prefix[i];
+    if (o > 1) out[o++] = '/';
+    const char* name = header->filename;
+    if (name[0] == '.' && name[1] == '/') name += 2;
+    for (int i = 0; i < 100 && name[i]; i++) out[o++] = name[i];
+    while (o > 1 && out[o - 1] == '/') o--;
+    out[o] = '\0';
 }
 
-/* VFS ReadDir Hook: Returns a child file in this directory */
-static struct dirent *tar_readdir(vfs_node_t *node, uint32_t index) {
-    if (node == &initrd_root_node && index < initrd_file_count) {
-        int i = 0;
-        while (initrd_nodes[index].name[i] != '\0') {
-            initrd_dirent.name[i] = initrd_nodes[index].name[i];
-            i++;
-        }
-        initrd_dirent.name[i] = '\0';
-        initrd_dirent.ino = index;
-        return &initrd_dirent;
-    }
-    return NULL;
-}
-
-/* VFS FindDir Hook: Searches for a specific file by name */
-static vfs_node_t *tar_finddir(vfs_node_t *node, char *name) {
-    if (node == &initrd_root_node) {
-        for (int i = 0; i < initrd_file_count; i++) {
-            if (strcmp(name, initrd_nodes[i].name) == 0) {
-                return &initrd_nodes[i];
-            }
-        }
-    }
-    return NULL;
-}
-
-vfs_node_t* tar_mount(uint32_t initrd_address) {
+int tar_load(uint32_t initrd_address) {
     uint32_t current_address = initrd_address;
-    
-    printf("--- Mounting IotaOS Ramdisk (VFS) ---\n");
+    int count = 0;
 
-    /* Set up the root directory node */
-    initrd_root_node.name[0] = '/';
-    initrd_root_node.name[1] = '\0';
-    initrd_root_node.flags = FS_DIRECTORY;
-    initrd_root_node.read = NULL;
-    initrd_root_node.write = NULL;
-    initrd_root_node.open = NULL;
-    initrd_root_node.close = NULL;
-    initrd_root_node.readdir = &tar_readdir;
-    initrd_root_node.finddir = &tar_finddir;
-    initrd_root_node.ptr = NULL;
-    initrd_root_node.impl = 0;
-
-    initrd_file_count = 0;
-
-    while (1) {
-        tar_header_t* header = (tar_header_t*)current_address;
-
-        if (header->filename[0] == '\0' || initrd_file_count >= 64) {
-            break;
-        }
-
-        uint32_t file_size = octal_string_to_int(header->size, 11);
-        
-        /* Register the file in the VFS tree */
-        vfs_node_t *node = &initrd_nodes[initrd_file_count];
-        int i = 0;
-        while (header->filename[i] != '\0' && i < 127) {
-            node->name[i] = header->filename[i];
-            i++;
-        }
-        node->name[i] = '\0';
-        node->flags = FS_FILE;
-        node->size = file_size;
-        node->impl = (uint32_t)header; /* Store pointer to header so we can find data later */
-        node->read = &tar_read;
-        node->write = NULL; /* Ramdisk is read-only */
-        node->open = NULL;
-        node->close = NULL;
-        node->readdir = NULL;
-        node->finddir = NULL;
-
-        printf("VFS: Linked file /%s (%d bytes)\n", node->name, file_size);
-        
-        initrd_file_count++;
-        current_address += 512 + (((file_size + 511) / 512) * 512);
-    }
-    
-    printf("--- VFS Mount Complete! ---\n\n");
-    return &initrd_root_node;
-}
-
-/* Legacy function kept for the moment until syscalls are fully updated */
-void* tar_get_file(uint32_t initrd_address, const char* target_filename, uint32_t *file_size_out) {
-    uint32_t current_address = initrd_address;
     while (1) {
         tar_header_t* header = (tar_header_t*)current_address;
         if (header->filename[0] == '\0') break;
+
         uint32_t file_size = octal_string_to_int(header->size, 11);
+        uint32_t mode = octal_string_to_int(header->mode, 8) & 07777;
+        uint32_t mtime = octal_string_to_int(header->mtime, 12);
+        uint32_t uid = octal_string_to_int(header->uid, 8);
+        uint32_t gid = octal_string_to_int(header->gid, 8);
+        char path[VFS_PATH_MAX];
+        entry_path(header, path);
 
-        int match = 1;
-        int i = 0;
-        while (target_filename[i] != '\0' || header->filename[i] != '\0') {
-            if (target_filename[i] != header->filename[i]) { match = 0; break; }
-            i++;
+        if (header->typeflag == '5') {
+            vfs_node_t* dir = vfs_mkdir_p(path);
+            if (dir) {
+                dir->mode = mode;
+                dir->mtime = mtime;
+                dir->uid = uid;
+                dir->gid = gid;
+            }
+        } else if (header->typeflag == '0' || header->typeflag == '\0' || header->typeflag == '1') {
+            char name[VFS_NAME_MAX];
+            vfs_node_t* parent = vfs_lookup_parent("/", path, name);
+            if (!parent) {
+                /* Archives may omit directory entries; create them as needed */
+                char dir_path[VFS_PATH_MAX];
+                strcpy(dir_path, path);
+                char* slash = dir_path + strlen(dir_path);
+                while (*slash != '/') slash--;
+                *slash = '\0';
+                parent = vfs_mkdir_p(dir_path[0] ? dir_path : "/");
+            }
+            vfs_node_t* node = parent ? vfs_finddir(parent, name) : NULL;
+            if (parent && !node) node = vfs_create(parent, name, FS_FILE, mode, NULL);
+            if (node) {
+                if (header->typeflag == '1') {
+                    /* Hard link: share the target's (read-only) image data */
+                    char target[VFS_PATH_MAX];
+                    tar_header_t fake = *header;
+                    for (int i = 0; i < 100; i++) fake.filename[i] = header->linkname[i];
+                    for (int i = 0; i < 155; i++) fake.prefix[i] = 0;
+                    entry_path(&fake, target);
+                    vfs_node_t* t = vfs_lookup("/", target);
+                    if (t) vfs_borrow(node, t->data, t->size);
+                } else {
+                    vfs_borrow(node, (uint8_t*)(current_address + 512), file_size);
+                }
+                node->mode = mode;
+                node->mtime = mtime;
+                node->uid = uid;
+                node->gid = gid;
+            }
         }
 
-        if (match) {
-            if (file_size_out) *file_size_out = file_size;
-            return (void*)(current_address + 512);
-        }
+        count++;
+        /* Links and directories have size 0, so they carry no data blocks */
         current_address += 512 + (((file_size + 511) / 512) * 512);
     }
-    return (void*)0;
+    return count;
 }

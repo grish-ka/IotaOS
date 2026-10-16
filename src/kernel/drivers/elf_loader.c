@@ -7,7 +7,7 @@
 #include "elf_loader.h"
 #include "stdio.h"
 #include "../mem/pmm.h"
-#include "../mem/paging.h" 
+#include "../mem/paging.h"
 #include <stddef.h>
 
 extern int current_exit_code;
@@ -20,102 +20,124 @@ static void elf_memset(uint8_t *dest, uint8_t value, uint32_t len) {
     for (uint32_t i = 0; i < len; i++) dest[i] = value;
 }
 
+/* Map zeroed pages over [start, end) in dir; returns -1 if memory runs out */
+static int map_zeroed(uint32_t *dir, uint32_t start, uint32_t end) {
+    for (uint32_t virt = start & ~0xFFF; virt < end; virt += PAGE_SIZE) {
+        if (vmm_get_phys(dir, virt)) continue; /* segments may share a page */
+        uint32_t phys = (uint32_t)pmm_alloc_block();
+        if (!phys) return -1;
+        elf_memset((uint8_t*)phys, 0, PAGE_SIZE);
+        vmm_map_page(dir, virt, phys, 7);
+    }
+    return 0;
+}
+
+/* Copy into another address space through the identity-mapped physical pages,
+   so the loader never has to switch CR3 away from the stack it is running on */
+static void copy_to_space(uint32_t *dir, uint32_t vaddr, const uint8_t *src, uint32_t len) {
+    while (len > 0) {
+        uint32_t chunk = PAGE_SIZE - (vaddr & 0xFFF);
+        if (chunk > len) chunk = len;
+        elf_memcpy((uint8_t*)vmm_get_phys(dir, vaddr), src, chunk);
+        vaddr += chunk;
+        src += chunk;
+        len -= chunk;
+    }
+}
+
 int elf_load(void *file_data, uint32_t file_size, elf_image_t *image) {
     (void)file_size; /* Ignored for now */
-    
+
     if (file_data == NULL || image == NULL) return -1;
     image->page_directory = NULL;
     image->entry = 0;
 
     const uint8_t *file = (const uint8_t *)file_data;
     const Elf32_Ehdr *header = (const Elf32_Ehdr *)file_data;
-    
+
     if (header->e_ident[0] != 0x7F || header->e_ident[1] != 'E' ||
         header->e_ident[2] != 'L' || header->e_ident[3] != 'F') {
-        printf("elf_loader: Invalid ELF Magic!\n");
         return -1;
+    }
+
+    const Elf32_Phdr *programs = (const Elf32_Phdr *)(file + header->e_phoff);
+
+    /* Everything must fit in the private region below the stack; mapping
+       anywhere else would write into page tables shared with the kernel */
+    for (uint32_t i = 0; i < header->e_phnum; i++) {
+        const Elf32_Phdr *program = &programs[i];
+        if (program->p_type != PT_LOAD || program->p_memsz == 0) continue;
+        if (program->p_vaddr < APP_REGION_BASE ||
+            program->p_vaddr + program->p_memsz > APP_STACK_BASE) {
+            printf("elf_loader: Segment at 0x%x does not fit the app region!\n", program->p_vaddr);
+            return -1;
+        }
     }
 
     uint32_t* new_dir = vmm_create_address_space();
     if (!new_dir) return -1;
 
-    const Elf32_Phdr *programs = (const Elf32_Phdr *)(file + header->e_phoff);
-
     for (uint32_t i = 0; i < header->e_phnum; i++) {
         const Elf32_Phdr *program = &programs[i];
         if (program->p_type != PT_LOAD || program->p_memsz == 0) continue;
 
-        uint32_t start_page = program->p_vaddr & ~0xFFF;
-        uint32_t end_page = (program->p_vaddr + program->p_memsz + 0xFFF) & ~0xFFF;
-
-        for (uint32_t virt = start_page; virt < end_page; virt += 4096) {
-            uint32_t phys = (uint32_t)pmm_alloc_block();
-            elf_memset((uint8_t*)phys, 0, 4096);
-            vmm_map_page(new_dir, virt, phys, 7); 
+        if (map_zeroed(new_dir, program->p_vaddr, program->p_vaddr + program->p_memsz) != 0) {
+            vmm_free_address_space(new_dir);
+            return -1;
         }
+        copy_to_space(new_dir, program->p_vaddr, file + program->p_offset, program->p_filesz);
     }
 
-    /* 1. Remember exactly whose memory space we are currently in! */
-    uint32_t old_cr3;
-    __asm__ volatile("mov %%cr3, %0" : "=r"(old_cr3));
-
-    /* 2. Switch into the new app's universe to write the data */
-    vmm_switch_directory(new_dir);
-
-    for (uint32_t i = 0; i < header->e_phnum; i++) {
-        const Elf32_Phdr *program = &programs[i];
-        if (program->p_type != PT_LOAD || program->p_memsz == 0) continue;
-
-        elf_memcpy((uint8_t*)program->p_vaddr, file + program->p_offset, program->p_filesz);
+    if (map_zeroed(new_dir, APP_STACK_BASE, APP_STACK_TOP) != 0) {
+        vmm_free_address_space(new_dir);
+        return -1;
     }
-
-    /* 3. Restore the EXACT caller's memory space (e.g. the Shell) */
-    vmm_switch_directory((uint32_t*)old_cr3);
 
     image->page_directory = new_dir;
     image->entry = header->e_entry;
     return 0;
 }
 
+/*
+ * Replace the calling context with the image: switch to its address space
+ * and its stack in one step, free the address space we came from, and jump
+ * to the entry point. Programs leave through SYS_EXIT, so this never returns.
+ */
 int elf_run(elf_image_t *image) {
     if (image == NULL || image->page_directory == NULL || image->entry == 0) return -1;
     current_exit_code = 0;
-    
-    /* Remember who called us (e.g. the Shell) so we can return to them safely */
+
     uint32_t old_cr3;
     __asm__ volatile("mov %%cr3, %0" : "=r"(old_cr3));
-    
-    vmm_switch_directory(image->page_directory);
-    void (*app_entry)(void) = (void (*)(void))image->entry;
-    app_entry();
-    
-    /* Go back to the exact directory that called us! */
-    vmm_switch_directory((uint32_t*)old_cr3); 
-    return current_exit_code;
+
+    __asm__ volatile (
+        "mov %%eax, %%cr3\n"       /* no stack access until ESP is reloaded */
+        "mov %%ecx, %%esp\n"
+        "push %%edx\n"
+        "call vmm_free_address_space\n"
+        "add $4, %%esp\n"
+        "sti\n"                    /* syscalls enter with IF=0; programs run with it set */
+        "call *%%ebx\n"            /* EBX survived the call above (callee-saved) */
+        "mov $6, %%eax\n"          /* entry returned: SYS_EXIT(0) */
+        "xor %%ebx, %%ebx\n"
+        "int $0x80\n"
+        "1: hlt\n"
+        "jmp 1b\n"
+        :
+        : "a"(image->page_directory), "c"(APP_STACK_TOP), "d"(old_cr3), "b"(image->entry)
+        : "memory"
+    );
+    __builtin_unreachable();
 }
 
 void elf_unload(elf_image_t *image) {
     if (image == NULL || image->page_directory == NULL) return;
-    
-    /* We only need to clean up the private app table at index 32 (128 MB) */
-    if (image->page_directory[32] & 1) { 
-        uint32_t* table = (uint32_t*)(image->page_directory[32] & ~0xFFF);
-        for (int j = 0; j < 1024; j++) {
-            if (table[j] & 1) {
-                pmm_free_block((void*)(table[j] & ~0xFFF));
-            }
-        }
-        pmm_free_block(table);
-    }
-    
-    pmm_free_block(image->page_directory);
+    vmm_free_address_space(image->page_directory);
     image->page_directory = NULL;
 }
 
 int elf_load_and_run(void *file_data, uint32_t file_size) {
     elf_image_t image;
     if (elf_load(file_data, file_size, &image) != 0) return -1;
-    int exit_code = elf_run(&image);
-    elf_unload(&image);
-    return exit_code;
+    return elf_run(&image);
 }

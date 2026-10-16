@@ -26,6 +26,22 @@ uint32_t* vmm_create_address_space(void);
 /* Clone an existing user address space entirely */
 uint32_t* vmm_clone_directory(uint32_t* current_dir);
 
+/* Physical address backing vaddr in dir, or 0 if it is not mapped */
+uint32_t vmm_get_phys(uint32_t* dir, uint32_t vaddr);
+
+/* Free a process directory with its private tables and pages (never the kernel's) */
+void vmm_free_address_space(uint32_t* dir);
+
+/*
+ * Per-process private region: page directory entry 32 (128 MB - 132 MB).
+ * Programs are linked at its base and their stack sits at its top, so a
+ * cloned directory has the stack at the same virtual address (fork-safe).
+ */
+#define APP_REGION_BASE 0x08000000
+#define APP_STACK_TOP   0x08400000
+#define APP_STACK_PAGES 64  /* 256 KB */
+#define APP_STACK_BASE  (APP_STACK_TOP - APP_STACK_PAGES * 4096)
+
 /* Switch the CPU to a new page directory */
 void vmm_switch_directory(uint32_t* dir);
 

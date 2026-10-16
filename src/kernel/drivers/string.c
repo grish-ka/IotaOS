@@ -7,13 +7,12 @@
 #include "string.h"
 
 int strcmp(const char* str1, const char* str2) {
-    while (*str1 != '\0' && *str2 != '\0') {
-        if (*str1 != *str2) return 1;
+    while (*str1 != '\0' && *str1 == *str2) {
         str1++;
         str2++;
     }
-    if (*str1 == '\0' && *str2 == '\0') return 0; 
-    return 1;
+    /* The sign matters: directory entries are kept sorted with this */
+    return *(const unsigned char*)str1 - *(const unsigned char*)str2;
 }
 
 size_t strlen(const char* str) {

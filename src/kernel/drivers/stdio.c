@@ -104,6 +104,7 @@ int printf(const char* format, ...) {
         }
     }
     va_end(arg);
+    terminal_flush_cursor();
     return written;
 }
 

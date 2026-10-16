@@ -30,10 +30,7 @@ typedef struct {
     char padding[12];    
 } __attribute__((packed)) tar_header_t;
 
-/* Mounts the ramdisk into the VFS tree and returns the root node */
-vfs_node_t* tar_mount(uint32_t initrd_address);
-
-/* Legacy function kept for the moment until syscalls are updated */
-void* tar_get_file(uint32_t initrd_address, const char* target_filename, uint32_t *file_size);
+/* Unpack the ustar ramdisk into the VFS tree under "/"; returns the number of entries */
+int tar_load(uint32_t initrd_address);
 
 #endif

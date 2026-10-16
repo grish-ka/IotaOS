@@ -10,6 +10,16 @@
 
 uint32_t* kernel_directory = 0;
 
+/*
+ * Does dir share the kernel's page table at index i? Compare the table
+ * address only: the CPU sets the Accessed bit in each directory's entry
+ * independently, so whole entries drift apart even for the same table.
+ */
+static int is_kernel_table(uint32_t* dir, int i) {
+    return (kernel_directory[i] & PAGE_PRESENT) &&
+           (dir[i] & ~0xFFF) == (kernel_directory[i] & ~0xFFF);
+}
+
 static void vmm_memset(uint8_t* dest, uint8_t val, uint32_t len) {
     for (uint32_t i = 0; i < len; i++) dest[i] = val;
 }
@@ -73,7 +83,7 @@ uint32_t* vmm_clone_directory(uint32_t* current_dir) {
     vmm_memset((uint8_t*)new_dir, 0, PAGE_SIZE);
 
     for(int i = 0; i < 1024; i++) {
-        if (current_dir[i] == kernel_directory[i]) {
+        if (is_kernel_table(current_dir, i)) {
             new_dir[i] = kernel_directory[i];
         } 
         else if (current_dir[i] & PAGE_PRESENT) {
@@ -98,4 +108,27 @@ uint32_t* vmm_clone_directory(uint32_t* current_dir) {
         }
     }
     return new_dir;
+}
+
+uint32_t vmm_get_phys(uint32_t* dir, uint32_t vaddr) {
+    uint32_t pde = dir[vaddr >> 22];
+    if (!(pde & PAGE_PRESENT)) return 0;
+    uint32_t* table = (uint32_t*)(pde & ~0xFFF);
+    uint32_t pte = table[(vaddr >> 12) & 0x03FF];
+    if (!(pte & PAGE_PRESENT)) return 0;
+    return (pte & ~0xFFF) | (vaddr & 0xFFF);
+}
+
+void vmm_free_address_space(uint32_t* dir) {
+    if (!dir || dir == kernel_directory) return;
+
+    for (int i = 0; i < 1024; i++) {
+        if (!(dir[i] & PAGE_PRESENT) || is_kernel_table(dir, i)) continue;
+        uint32_t* table = (uint32_t*)(dir[i] & ~0xFFF);
+        for (int j = 0; j < 1024; j++) {
+            if (table[j] & PAGE_PRESENT) pmm_free_block((void*)(table[j] & ~0xFFF));
+        }
+        pmm_free_block(table);
+    }
+    pmm_free_block(dir);
 }

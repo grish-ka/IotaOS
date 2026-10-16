@@ -1,0 +1,34 @@
+/*
+* IotaOS - stdint.h
+* Copyright (c) 2026 grish-ka
+* Licensed under the MIT License.
+*/
+
+#ifndef _STDINT_H
+#define _STDINT_H
+
+typedef signed char int8_t;
+typedef unsigned char uint8_t;
+typedef short int16_t;
+typedef unsigned short uint16_t;
+typedef int int32_t;
+typedef unsigned int uint32_t;
+typedef long long int64_t;
+typedef unsigned long long uint64_t;
+
+typedef long long intmax_t;
+typedef unsigned long long uintmax_t;
+
+#ifndef _UINTPTR_T_DEFINED
+#define _UINTPTR_T_DEFINED
+typedef unsigned int uintptr_t;
+typedef int intptr_t;
+#endif
+
+#ifndef INTMAX_MIN
+#define INTMAX_MIN (-9223372036854775807LL - 1)
+#define INTMAX_MAX 9223372036854775807LL
+#define UINTMAX_MAX 18446744073709551615ULL
+#endif
+
+#endif

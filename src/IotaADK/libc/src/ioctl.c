@@ -1,3 +1,9 @@
+/*
+* IotaOS - ioctl.c
+* Copyright (c) 2026 grish-ka
+* Licensed under the MIT License.
+*/
+
 #include <stdarg.h>
 
 int ioctl(int fd, unsigned long request, ...) {
