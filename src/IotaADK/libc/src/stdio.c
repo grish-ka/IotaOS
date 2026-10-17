@@ -5,10 +5,12 @@
 */
 
 #include "stdio.h"
+#include <stdio_ext.h>
 #include "unistd.h"
 #include "string.h"
 #include "stdlib.h"
 #include "fcntl.h"
+#include <sys/wait.h>
 #include "iota.h"
 #include <sys/stat.h>
 #include <stdint.h>
@@ -18,17 +20,22 @@
 #define F_EOF   1
 #define F_ERR   2
 #define F_STATIC 4
+#define F_READING 8   /* last operation was a read */
+#define F_WRITING 16  /* last operation was a write */
+
+static int mode_flags(const char *mode);
 
 struct _FILE {
     int fd;
     int flags;
     int ungot;  /* pushed-back char from ungetc, or EOF */
+    int pid;    /* child process of a popen() stream, else 0 */
 };
 
 static FILE std_streams[3] = {
-    { 0, F_STATIC, EOF },
-    { 1, F_STATIC, EOF },
-    { 2, F_STATIC, EOF },
+    { 0, F_STATIC, EOF, 0 },
+    { 1, F_STATIC, EOF, 0 },
+    { 2, F_STATIC, EOF, 0 },
 };
 
 FILE *stdin = &std_streams[0];
@@ -389,20 +396,47 @@ FILE *fdopen(int fd, const char *mode) {
     f->fd = fd;
     f->flags = 0;
     f->ungot = EOF;
+    f->pid = 0;
     return f;
 }
 
 FILE *fopen(const char *pathname, const char *mode) {
-    int oflag = O_RDONLY;
-    if (mode[0] == 'w') oflag = O_WRONLY | O_CREAT | O_TRUNC;
-    else if (mode[0] == 'a') oflag = O_WRONLY | O_CREAT | O_APPEND;
-    if (strchr(mode, '+')) oflag = (oflag & ~(O_RDONLY | O_WRONLY)) | O_RDWR;
-
-    int fd = open(pathname, oflag, 0666);
+    int fd = open(pathname, mode_flags(mode), 0666);
     if (fd < 0) return NULL;
     FILE *f = fdopen(fd, mode);
     if (!f) close(fd);
     return f;
+}
+
+static int mode_flags(const char *mode) {
+    int oflag = O_RDONLY;
+    if (mode[0] == 'w') oflag = O_WRONLY | O_CREAT | O_TRUNC;
+    else if (mode[0] == 'a') oflag = O_WRONLY | O_CREAT | O_APPEND;
+    if (strchr(mode, '+')) oflag = (oflag & ~(O_RDONLY | O_WRONLY)) | O_RDWR;
+    if (strchr(mode, 'e')) oflag |= O_CLOEXEC;
+    if (strchr(mode, 'x')) oflag |= O_EXCL;
+    return oflag;
+}
+
+/* Reopen stream on path, keeping its descriptor number (so freopen on stdin
+   still reads fd 0). With path NULL only the mode would change: accepted. */
+FILE *freopen(const char *path, const char *mode, FILE *stream) {
+    stream->ungot = EOF;
+    stream->flags &= F_STATIC;
+    if (!path) return stream;
+    int fd = open(path, mode_flags(mode), 0666);
+    if (fd < 0) {
+        fclose(stream);
+        return NULL;
+    }
+    if (fd != stream->fd) {
+        if (dup2(fd, stream->fd) < 0) {
+            close(fd);
+            return NULL;
+        }
+        close(fd);
+    }
+    return stream;
 }
 
 int fclose(FILE *stream) {
@@ -416,8 +450,13 @@ int fileno(FILE *stream) {
     return stream->fd;
 }
 
+/* Output is unbuffered. For input, give back a pushed-back byte so the file
+   position matches what the program has consumed (POSIX fflush on input) */
 int fflush(FILE *stream) {
-    (void)stream;
+    if (stream && stream->ungot != EOF) {
+        lseek(stream->fd, -1, SEEK_CUR);
+        stream->ungot = EOF;
+    }
     return 0;
 }
 
@@ -427,6 +466,7 @@ void clearerr(FILE *stream) { stream->flags &= ~(F_EOF | F_ERR); }
 
 size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream) {
     size_t bytes = size * nmemb;
+    stream->flags = (stream->flags & ~F_READING) | F_WRITING;
     if (bytes == 0) return 0;
     ssize_t w = write(stream->fd, ptr, bytes);
     if (w < 0) {
@@ -438,6 +478,7 @@ size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream) {
 
 size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream) {
     size_t bytes = size * nmemb;
+    stream->flags = (stream->flags & ~F_WRITING) | F_READING;
     size_t got = 0;
     unsigned char *p = ptr;
     if (bytes == 0) return 0;
@@ -458,6 +499,7 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream) {
 
 int fgetc(FILE *stream) {
     unsigned char c;
+    stream->flags = (stream->flags & ~F_WRITING) | F_READING;
     if (stream->ungot != EOF) {
         c = (unsigned char)stream->ungot;
         stream->ungot = EOF;
@@ -507,6 +549,7 @@ char *gets(char *buffer, int max_size) {
 
 int fputc(int c, FILE *stream) {
     unsigned char ch = (unsigned char)c;
+    stream->flags = (stream->flags & ~F_READING) | F_WRITING;
     if (write(stream->fd, &ch, 1) != 1) {
         stream->flags |= F_ERR;
         return EOF;
@@ -519,6 +562,7 @@ int putchar(int c) { return fputc(c, stdout); }
 
 int fputs(const char *s, FILE *stream) {
     size_t n = strlen(s);
+    stream->flags = (stream->flags & ~F_READING) | F_WRITING;
     if (n && write(stream->fd, s, n) < 0) {
         stream->flags |= F_ERR;
         return EOF;
@@ -531,11 +575,6 @@ int puts(const char *s) {
     return fputc('\n', stdout) == EOF ? EOF : 0;
 }
 
-int fscanf(FILE *stream, const char *format, ...) {
-    (void)stream;
-    (void)format;
-    return EOF;
-}
 
 int rename(const char *oldpath, const char *newpath) {
     int r = iota_syscall3(IOTA_SYS_RENAME, (uint32_t)oldpath, (uint32_t)newpath, 0);
@@ -624,4 +663,107 @@ __attribute__((weak)) int dprintf(int fd, const char *fmt, ...) {
     va_end(ap);
     write(fd, buf, n < (int)sizeof(buf) ? n : (int)sizeof(buf) - 1);
     return n;
+}
+
+/* Run command with /bin/sh and connect to its stdin ("w") or stdout ("r") */
+FILE *popen(const char *command, const char *type) {
+    int reading = (type[0] == 'r');
+    if (!reading && type[0] != 'w') {
+        errno = EINVAL;
+        return NULL;
+    }
+    int fds[2];
+    if (pipe(fds) < 0) return NULL;
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(fds[0]);
+        close(fds[1]);
+        return NULL;
+    }
+    if (pid == 0) {
+        if (reading) dup2(fds[1], STDOUT_FILENO);
+        else dup2(fds[0], STDIN_FILENO);
+        close(fds[0]);
+        close(fds[1]);
+        extern char **environ;
+        char *argv[] = {"sh", "-c", (char *)command, NULL};
+        execve("/bin/sh", argv, environ);
+        _exit(127);
+    }
+
+    FILE *f = fdopen(reading ? fds[0] : fds[1], type);
+    close(reading ? fds[1] : fds[0]);
+    if (!f) {
+        close(reading ? fds[0] : fds[1]);
+        return NULL;
+    }
+    f->pid = pid;
+    return f;
+}
+
+int pclose(FILE *stream) {
+    pid_t pid = stream->pid;
+    fclose(stream);
+    if (pid <= 0) {
+        errno = ECHILD;
+        return -1;
+    }
+    int status;
+    if (waitpid(pid, &status, 0) < 0) return -1;
+    return status;
+}
+
+int fseeko(FILE *stream, off_t offset, int whence) {
+    return fseek(stream, (long)offset, whence);
+}
+
+off_t ftello(FILE *stream) {
+    return (off_t)ftell(stream);
+}
+
+__attribute__((weak)) int vasprintf(char **strp, const char *fmt, va_list ap) {
+    va_list copy;
+    va_copy(copy, ap);
+    int len = vsnprintf(NULL, 0, fmt, copy);
+    va_end(copy);
+    if (len < 0) return -1;
+    *strp = malloc(len + 1);
+    if (!*strp) return -1;
+    return vsnprintf(*strp, len + 1, fmt, ap);
+}
+
+__attribute__((weak)) int asprintf(char **strp, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int r = vasprintf(strp, fmt, ap);
+    va_end(ap);
+    return r;
+}
+
+/* ---- <stdio_ext.h> ---- */
+
+size_t __fbufsize(FILE *stream) { (void)stream; return 0; }
+size_t __fpending(FILE *stream) { (void)stream; return 0; }
+int __flbf(FILE *stream) { (void)stream; return 0; }
+int __freadable(FILE *stream) { (void)stream; return 1; }
+int __fwritable(FILE *stream) { (void)stream; return 1; }
+int __freading(FILE *stream) { return (stream->flags & F_READING) != 0; }
+int __fwriting(FILE *stream) { return (stream->flags & F_WRITING) != 0; }
+int __fsetlocking(FILE *stream, int type) { (void)stream; (void)type; return FSETLOCKING_INTERNAL; }
+void __fpurge(FILE *stream) { stream->ungot = EOF; }
+void __fseterr(FILE *stream) { stream->flags |= F_ERR; }
+void _flushlbf(void) {}
+size_t __freadahead(FILE *stream) { return stream->ungot != EOF ? 1 : 0; }
+
+const char *__freadptr(FILE *stream, size_t *sizep) {
+    static char byte;
+    if (stream->ungot == EOF) return NULL;
+    byte = (char)stream->ungot;
+    *sizep = 1;
+    return &byte;
+}
+
+void __freadptrinc(FILE *stream, size_t increment) {
+    if (increment) stream->ungot = EOF;
 }

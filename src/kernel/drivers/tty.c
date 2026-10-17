@@ -9,7 +9,7 @@
 #include "cpu/task.h"
 
 static struct termios current_termios = {
-    .c_iflag = 0, .c_oflag = 0, .c_cflag = 0,
+    .c_iflag = 0, .c_oflag = OPOST | ONLCR, .c_cflag = 0,
     .c_lflag = ICANON | ECHO | ISIG
 };
 
@@ -23,6 +23,10 @@ static volatile int tty_eof = 0;     /* pending Ctrl-D end-of-file marks */
 static volatile int tty_line_start = 0; /* where the line being edited begins */
 
 static vfs_node_t* tty_node;
+
+/* Foreground process group, as set with tcsetpgrp(); kept for programs
+   that hand the terminal to a child and wait until it owns it */
+static int tty_fg_pgrp = 1;
 
 static void tty_echo(char c) {
     if (current_termios.c_lflag & ECHO) {
@@ -94,6 +98,12 @@ void tty_input_seq(const char *seq) {
     while (*seq) tty_input_char(*seq++);
 }
 
+/* Would a read() return now? (a complete line in canonical mode, any byte in raw mode) */
+int tty_readable(void) {
+    if (current_termios.c_lflag & ICANON) return tty_lines > 0 || tty_eof > 0;
+    return tty_head != tty_tail;
+}
+
 static uint32_t tty_read(vfs_node_t *node, uint32_t offset, uint32_t size, uint8_t *buffer) {
     (void)node; (void)offset;
     uint32_t read = 0;
@@ -137,8 +147,11 @@ static uint32_t tty_read(vfs_node_t *node, uint32_t offset, uint32_t size, uint8
 
 static uint32_t tty_write(vfs_node_t *node, uint32_t offset, uint32_t size, uint8_t *buffer) {
     (void)node; (void)offset;
+    /* Output processing: with OPOST and ONLCR (the default), "\n" becomes "\r\n" */
+    int onlcr = (current_termios.c_oflag & (OPOST | ONLCR)) == (OPOST | ONLCR);
     for (uint32_t i = 0; i < size; i++) {
-        terminal_putchar(buffer[i]);
+        if (onlcr && buffer[i] == '\n') terminal_emit('\r');
+        terminal_emit(buffer[i]);
     }
     terminal_flush_cursor();
     return size;
@@ -170,9 +183,10 @@ static int tty_ioctl(vfs_node_t *node, uint32_t request, void *arg) {
     case TIOCSWINSZ:
         return 0;
     case TIOCGPGRP:
-        *(int*)arg = 1;
+        *(int*)arg = tty_fg_pgrp;
         return 0;
     case TIOCSPGRP:
+        tty_fg_pgrp = *(int*)arg;
         return 0;
     case FIONREAD:
         *(int*)arg = (tty_head - tty_tail + TTY_BUF_SIZE) % TTY_BUF_SIZE;
@@ -181,8 +195,14 @@ static int tty_ioctl(vfs_node_t *node, uint32_t request, void *arg) {
     return -25; /* ENOTTY */
 }
 
+/* Terminal replies (cursor position reports) arrive as if typed */
+static void tty_respond(const char* s) {
+    while (*s) tty_input_char(*s++);
+}
+
 void tty_init(vfs_node_t* node) {
     tty_node = node;
+    terminal_set_responder(tty_respond);
     node->flags = FS_CHARDEVICE;
     node->mode = 0620;
     node->read = &tty_read;

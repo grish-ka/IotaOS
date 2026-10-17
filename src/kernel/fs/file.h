@@ -53,6 +53,17 @@ int file_create_pipe(file_t** read_end, file_t** write_end);
 void file_ref(file_t* f);
 void file_put(file_t* f);
 
+/* poll() event bits, matching libc's <poll.h> */
+#define POLLIN   0x001
+#define POLLPRI  0x002
+#define POLLOUT  0x004
+#define POLLERR  0x008
+#define POLLHUP  0x010
+#define POLLNVAL 0x020
+
+/* Which of the requested events are ready on f right now */
+int file_poll(file_t* f, int events);
+
 int32_t file_read(file_t* f, uint8_t* buf, uint32_t count);
 int32_t file_write(file_t* f, const uint8_t* buf, uint32_t count);
 

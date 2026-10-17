@@ -14,6 +14,10 @@ extern void irq0(void);
 extern void irq1(void);
 extern void irq128(void);
 extern void irq129(void);
+extern void irq2(void), irq3(void), irq4(void), irq5(void), irq6(void), irq7(void);
+extern void irq8(void), irq9(void), irq10(void), irq11(void), irq12(void), irq13(void);
+extern void irq14(void), irq15(void);
+extern void unexpected_interrupt(void);
 
 /* Declare all 32 assembly wrappers so C knows they exist */
 extern void isr0(void);
@@ -61,14 +65,15 @@ void idt_install(void) {
     idtp.limit = (sizeof(struct idt_entry) * 256) - 1;
     idtp.base = (uint32_t)&idt;
 
-    /* Clear the table with zeros first */
-    for (int i = 0; i < 256; i++) {
-        idt_set_gate(i, 0, 0, 0);
-    }
-
     /* DYNAMICALLY grab the exact Code Segment the CPU is using */
     uint16_t current_cs;
     __asm__ volatile("mov %%cs, %0" : "=r"(current_cs));
+
+    /* Every vector starts out harmless: an empty gate would turn any stray
+       interrupt into a General Protection Fault */
+    for (int i = 0; i < 256; i++) {
+        idt_set_gate(i, (uint32_t)unexpected_interrupt, current_cs, 0x8E);
+    }
 
     /* Plug all 32 CPU Exception wrappers into the IDT */
     idt_set_gate(0, (uint32_t)isr0, current_cs, 0x8E);
@@ -107,6 +112,13 @@ void idt_install(void) {
     /* Hardware Interrupts */
     idt_set_gate(32, (uint32_t)irq0, current_cs, 0x8E); /* Timer */
     idt_set_gate(33, (uint32_t)irq1, current_cs, 0x8E); /* Keyboard */
+    void (*const other_irqs[])(void) = {
+        irq2, irq3, irq4, irq5, irq6, irq7, irq8, irq9,
+        irq10, irq11, irq12, irq13, irq14, irq15,
+    };
+    for (int i = 0; i < 14; i++) {
+        idt_set_gate(34 + i, (uint32_t)other_irqs[i], current_cs, 0x8E);
+    }
     
     /* * 0xEE (1110 1110) is the magic:
      * The 'E' tells the CPU this is a 32-bit Interrupt Gate.

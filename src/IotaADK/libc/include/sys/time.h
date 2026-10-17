@@ -42,6 +42,8 @@ struct itimerval {
 #endif
 
 int gettimeofday(struct timeval *tv, struct timezone *tz);
+int utimes(const char *path, const struct timeval times[2]);
+int futimes(int fd, const struct timeval times[2]);
 int settimeofday(const struct timeval *tv, const struct timezone *tz);
 int getitimer(int which, struct itimerval *curr_value);
 int setitimer(int which, const struct itimerval *new_value, struct itimerval *old_value);

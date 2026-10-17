@@ -25,6 +25,7 @@
 #include "cpu/syscall.h"
 #include "drivers/rtc.h"
 #include "drivers/devices.h"
+#include "drivers/diag.h"
 
 uint32_t global_initrd_address = 0;
 
@@ -65,10 +66,14 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
 
     uint32_t bitmap_loc = 0x200000;
     uint32_t total_memory = 256 * 1024 * 1024;
+    uint32_t detected_memory = total_memory;
+    uint32_t initrd_size = 0;
+    uint32_t boot_flags = 0;
 
     if (magic == MULTIBOOT_BOOTLOADER_MAGIC) {
         multiboot_info_t* mb_info = (multiboot_info_t*)multiboot_info_addr;
         
+        boot_flags = mb_info->flags;
         if (mb_info->flags & 1) {
             uint32_t total_kb = mb_info->mem_lower + mb_info->mem_upper + 1024;
             if (total_kb >= 4194304) {
@@ -81,6 +86,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         if (mb_info->mods_count > 0) {
             multiboot_module_t* module = (multiboot_module_t*)mb_info->mods_addr;
             global_initrd_address = module->mod_start;
+            initrd_size = module->mod_end - module->mod_start;
             bitmap_loc = (module->mod_end + 4095) & ~4095;
         } else {
             panic("Error: GRUB reports 0 modules loaded.\n");
@@ -94,6 +100,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
      * must stay below the per-process heap at TASK_HEAP_BASE (1 GB); memory
      * above that is not used.
      */
+    detected_memory = total_memory;
     if (total_memory > TASK_HEAP_BASE) total_memory = TASK_HEAP_BASE;
 
     pic_remap();
@@ -115,6 +122,7 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
     paging_init(total_memory);
     task_init();
     timer_init(100);
+    boot_key_phase = 1;  /* a key held down from power-on counts as "diagnostics" */
     __asm__ volatile("sti");
 
     rtc_init();
@@ -143,6 +151,22 @@ void kernel_main(uint32_t magic, uint32_t multiboot_info_addr)
         fd_install(fds, f, fd);
     }
     boot_ok("Started console on /dev/tty1");
+
+    /* A pause point on every boot: DEL (or Esc, F2) opens the diagnostics screen */
+    int diag_requested = boot_key == BOOT_KEY_DEL || boot_key == BOOT_KEY_ESC || boot_key == BOOT_KEY_F2;
+    if (!diag_requested) diag_requested = diag_boot_window(2);
+    if (diag_requested) {
+        diag_boot_info_t info = {
+            .total_memory = total_memory,
+            .detected_memory = detected_memory,
+            .initrd_address = global_initrd_address,
+            .initrd_size = initrd_size,
+            .fs_entries = (uint32_t)entries,
+            .multiboot_flags = boot_flags,
+        };
+        diag_run(&info);
+    }
+    boot_key_phase = 0;
     printf("\n");
 
     run_init();

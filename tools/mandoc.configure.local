@@ -1,0 +1,53 @@
+# mandoc cross build for IotaOS (copied to configure.local by the Makefile;
+# @ROOT@ becomes the repository path). Every probe is answered here because
+# configure cannot run IotaOS test programs on the build machine.
+OSNAME="IotaOS 1.0"
+CC=i686-elf-gcc
+AR=i686-elf-ar
+CFLAGS="-std=gnu99 -O2 -ffreestanding -fno-pie -fno-pic -I@ROOT@/src/IotaADK/libc/include -I@ROOT@/src/IotaADK/include -I@ROOT@/src/gnu/zlib-1.3.1"
+LDFLAGS="-nostdlib -T @ROOT@/src/IotaADK/lib/linker.ld @ROOT@/build/crt0.o"
+LDADD="-L@ROOT@/build -lz -lc -lgcc"
+STATIC=
+MANPATH_BASE="/usr/share/man"
+MANPATH_DEFAULT="/usr/share/man:/usr/local/share/man"
+BINM_PAGER=more
+PREFIX=/usr
+
+HAVE_ATTRIBUTE=1
+HAVE_CMSG=0
+HAVE_DIRENT_NAMLEN=0
+HAVE_EFTYPE=0
+HAVE_ENDIAN=0
+HAVE_SYS_ENDIAN=0
+HAVE_NTOHL=1
+HAVE_ERR=0
+HAVE_FTS=0
+HAVE_FTS_COMPARE_CONST=0
+HAVE_GETLINE=1
+HAVE_GETSUBOPT=0
+HAVE_ISBLANK=1
+HAVE_LESS_T=0
+HAVE_MKDTEMP=0
+HAVE_MKSTEMPS=0
+HAVE_NANOSLEEP=1
+HAVE_O_DIRECTORY=1
+HAVE_OHASH=0
+HAVE_PATH_MAX=0
+HAVE_PLEDGE=0
+HAVE_PROGNAME=1
+HAVE_REALLOCARRAY=0
+HAVE_RECALLOCARRAY=0
+HAVE_RECVMSG=0
+HAVE_REWB_BSD=0
+HAVE_REWB_SYSV=0
+HAVE_SANDBOX_INIT=0
+HAVE_STRCASESTR=1
+HAVE_STRINGLIST=0
+HAVE_STRLCAT=0
+HAVE_STRLCPY=0
+HAVE_STRNDUP=1
+HAVE_STRPTIME=0
+HAVE_STRSEP=1
+HAVE_STRTONUM=0
+HAVE_VASPRINTF=0
+HAVE_WCHAR=0

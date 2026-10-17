@@ -8,6 +8,9 @@
 #define _TERMIOS_H
 
 #include <sys/types.h>
+#include <sys/ttydefaults.h>
+
+#define _POSIX_VDISABLE '\0'
 
 typedef unsigned int tcflag_t;
 typedef unsigned char cc_t;
@@ -61,6 +64,32 @@ struct termios {
 /* c_oflag (output modes) */
 #define OPOST   0000001
 #define ONLCR   0000004
+#define OLCUC   0000002
+#define OFILL   0000100
+#define OFDEL   0000200
+#define NLDLY   0000400
+#define NL0     0000000
+#define NL1     0000400
+#define CRDLY   0003000
+#define CR0     0000000
+#define CR1     0001000
+#define CR2     0002000
+#define CR3     0003000
+#define TABDLY  0014000
+#define TAB0    0000000
+#define TAB1    0004000
+#define TAB2    0010000
+#define TAB3    0014000
+#define XTABS   0014000
+#define BSDLY   0020000
+#define BS0     0000000
+#define BS1     0020000
+#define VTDLY   0040000
+#define VT0     0000000
+#define VT1     0040000
+#define FFDLY   0100000
+#define FF0     0000000
+#define FF1     0100000
 #define OCRNL   0000010
 #define ONOCR   0000020
 #define ONLRET  0000040
@@ -111,9 +140,30 @@ struct termios {
 #define TCIOFF 2
 #define TCION  3
 
+/* Line speeds (cfgetospeed etc.); the console always reports B38400 */
+#define B0      0000000
+#define B50     0000001
+#define B75     0000002
+#define B110    0000003
+#define B134    0000004
+#define B150    0000005
+#define B200    0000006
+#define B300    0000007
+#define B600    0000010
+#define B1200   0000011
+#define B1800   0000012
+#define B2400   0000013
+#define B4800   0000014
+#define B9600   0000015
+#define B19200  0000016
+#define B38400  0000017
+#define B57600  0010001
+#define B115200 0010002
+
 int tcgetattr(int fd, struct termios *termios_p);
 int tcflow(int fd, int action);
 int tcsetattr(int fd, int optional_actions, const struct termios *termios_p);
+void cfmakeraw(struct termios *termios_p);
 int tcsendbreak(int fd, int duration);
 int tcdrain(int fd);
 int tcflush(int fd, int queue_selector);

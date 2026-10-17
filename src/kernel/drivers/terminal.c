@@ -2,6 +2,9 @@
  * IotaOS - terminal.c
  * Copyright (c) 2026 grish-ka
  * Licensed under the MIT License.
+ *
+ * VGA text console with a Linux-console-compatible escape sequence parser,
+ * so the "linux" terminfo/termcap entries describe it correctly.
  */
 
 #include <stdbool.h>
@@ -19,10 +22,13 @@ size_t terminal_column;
 uint8_t terminal_color;
 uint16_t* terminal_buffer = (uint16_t*)VGA_MEMORY;
 
-/* --- ANSI STATE MACHINE --- */
-#define ANSI_NORMAL 0
-#define ANSI_ESC    1
-#define ANSI_CSI    2
+/* --- ESCAPE SEQUENCE STATE MACHINE --- */
+#define ANSI_NORMAL  0
+#define ANSI_ESC     1   /* after ESC */
+#define ANSI_CSI     2   /* after ESC [ */
+#define ANSI_CHARSET 3   /* after ESC ( or ESC ): one designator byte follows */
+#define ANSI_OSC     4   /* after ESC ] */
+#define ANSI_SKIP    5   /* swallowing a fixed number of bytes */
 
 #define MAX_PARAMS 8
 
@@ -32,20 +38,40 @@ static int ansi_param_count = 0;
 static int ansi_current_param = 0;
 static int ansi_have_digit = 0;
 static int ansi_private = 0;   /* CSI sequence started with '?' */
+static int charset_target = 0; /* 0 = G0 "(", 1 = G1 ")" */
+static int skip_count = 0;
 
 /* SGR state: colours are recomputed from these on every change */
 static uint8_t sgr_fg = DEFAULT_FG;
 static uint8_t sgr_bg = DEFAULT_BG;
 static int sgr_bold = 0;
 static int sgr_reverse = 0;
+static int sgr_underline = 0;
 
 static size_t saved_row = 0;
 static size_t saved_column = 0;
 
+/* Scrolling region (inclusive rows), set with ESC [ top ; bottom r */
+static size_t scroll_top = 0;
+static size_t scroll_bottom = VGA_HEIGHT - 1;
+
+/* Character sets: G0/G1 are either normal text or DEC line drawing */
+static int g_graphics[2] = {0, 0};
+static int active_g = 0;       /* SO (^N) selects G1, SI (^O) selects G0 */
+
+static int insert_mode = 0;    /* ESC [ 4 h */
+
 /* After writing the last column the cursor stays there until the next
    printable character (the "xn" quirk of the Linux console), so a line of
-   exactly 80 characters followed by '\n' does not leave a blank line */
+   exactly 80 characters followed by a newline does not leave a blank line */
 static int wrap_pending = 0;
+
+/* Where replies to status queries (cursor position etc.) are sent */
+static void (*responder)(const char*) = 0;
+
+void terminal_set_responder(void (*send)(const char*)) {
+    responder = send;
+}
 
 /* Standard ANSI 30-37 map to standard VGA colors */
 static const uint8_t ansi_to_vga[] = {
@@ -59,9 +85,19 @@ static const uint8_t ansi_to_vga[] = {
     VGA_COLOR_LIGHT_GREY  /* 37: White/Grey */
 };
 
+/* DEC special graphics (line drawing) to code page 437, for '`' .. '~' */
+static const uint8_t dec_graphics[] = {
+    0x04, 0xB1, 0x09, 0x0C, 0x0D, 0x0A, 0xF8, 0xF1, /* ` a b c d e f g */
+    0x0A, 0x0B, 0xD9, 0xBF, 0xDA, 0xC0, 0xC5, 0xC4, /* h i j k l m n o */
+    0xC4, 0xC4, 0xC4, 0xC4, 0xC3, 0xB4, 0xC1, 0xC2, /* p q r s t u v w */
+    0xB3, 0xF3, 0xF2, 0xE3, 0xD8, 0x9C, 0xFA,       /* x y z { | } ~   */
+};
+
 static void update_color(void) {
     uint8_t fg = sgr_fg;
     uint8_t bg = sgr_bg;
+    /* VGA text mode cannot underline: like the Linux console, use a colour */
+    if (sgr_underline && sgr_fg == DEFAULT_FG) fg = VGA_COLOR_CYAN;
     if (sgr_bold) fg |= 0x08; /* the Linux console shows bold as bright */
     if (sgr_reverse) {
         uint8_t t = fg;
@@ -87,9 +123,23 @@ void terminal_clear(void)
     terminal_flush_cursor();
 }
 
+static void reset_state(void) {
+    sgr_fg = DEFAULT_FG;
+    sgr_bg = DEFAULT_BG;
+    sgr_bold = 0;
+    sgr_reverse = 0;
+    sgr_underline = 0;
+    scroll_top = 0;
+    scroll_bottom = VGA_HEIGHT - 1;
+    g_graphics[0] = g_graphics[1] = 0;
+    active_g = 0;
+    insert_mode = 0;
+    update_color();
+}
+
 void terminal_initialize(void)
 {
-    update_color();
+    reset_state();
     terminal_clear();
 }
 
@@ -112,55 +162,88 @@ void terminal_flush_cursor(void) {
     outb(0x3D5, (uint8_t)((pos >> 8) & 0xFF));
 }
 
-static void terminal_scroll(void) {
-    for (size_t i = 0; i < VGA_WIDTH * (VGA_HEIGHT - 1); i++) {
-        terminal_buffer[i] = terminal_buffer[i + VGA_WIDTH];
+/* Move rows [top, bottom] up by n lines, blanking the bottom ones */
+static void scroll_up(size_t top, size_t bottom, size_t n) {
+    if (n > bottom - top + 1) n = bottom - top + 1;
+    for (size_t r = top; r + n <= bottom; r++) {
+        for (size_t x = 0; x < VGA_WIDTH; x++) {
+            terminal_buffer[r * VGA_WIDTH + x] = terminal_buffer[(r + n) * VGA_WIDTH + x];
+        }
     }
-    clear_cells(VGA_WIDTH * (VGA_HEIGHT - 1), VGA_WIDTH * VGA_HEIGHT);
+    clear_cells((bottom + 1 - n) * VGA_WIDTH, (bottom + 1) * VGA_WIDTH);
 }
 
-static void newline(void) {
-    terminal_column = 0;
-    terminal_row++;
-    if (terminal_row == VGA_HEIGHT) {
-        terminal_scroll();
-        terminal_row = VGA_HEIGHT - 1;
+/* Move rows [top, bottom] down by n lines, blanking the top ones */
+static void scroll_down(size_t top, size_t bottom, size_t n) {
+    if (n > bottom - top + 1) n = bottom - top + 1;
+    for (size_t r = bottom; r >= top + n; r--) {
+        for (size_t x = 0; x < VGA_WIDTH; x++) {
+            terminal_buffer[r * VGA_WIDTH + x] = terminal_buffer[(r - n) * VGA_WIDTH + x];
+        }
     }
+    clear_cells(top * VGA_WIDTH, (top + n) * VGA_WIDTH);
 }
 
-/* Helper to process raw character drawing */
-static void terminal_putchar_raw(char c)
+/* Line feed: down one row, scrolling the region at its bottom edge */
+static void line_feed(void) {
+    if (terminal_row == scroll_bottom) scroll_up(scroll_top, scroll_bottom, 1);
+    else if (terminal_row < VGA_HEIGHT - 1) terminal_row++;
+}
+
+/* Reverse line feed (ESC M): up one row, scrolling at the top edge */
+static void reverse_line_feed(void) {
+    if (terminal_row == scroll_top) scroll_down(scroll_top, scroll_bottom, 1);
+    else if (terminal_row > 0) terminal_row--;
+}
+
+/* Draw one character the way a terminal does: no newline translation */
+static void put_raw(char c)
 {
-    if (c != '\n' && (unsigned char)c >= 0x20 && wrap_pending) {
+    unsigned char uc = (unsigned char)c;
+    if (uc >= 0x20 && wrap_pending) {
         wrap_pending = 0;
-        newline();
+        terminal_column = 0;
+        line_feed();
     }
-    if ((unsigned char)c < 0x20) wrap_pending = 0;
+    if (uc < 0x20) wrap_pending = 0;
 
-    switch (c) {
+    switch (uc) {
     case '\n':
-        newline();
-        break;
+    case '\v':
+    case '\f':
+        line_feed();
+        return;
     case '\r':
         terminal_column = 0;
-        break;
+        return;
     case '\b':
         /* Cursor left only, as on a real terminal; erasing is "\b \b" */
         if (terminal_column > 0) terminal_column--;
-        break;
+        return;
     case '\t':
         terminal_column += 8 - (terminal_column % 8);
-        if (terminal_column >= VGA_WIDTH) newline();
-        break;
-    case '\a':
-        break;
-    default:
-        if ((unsigned char)c < 0x20) break; /* other control characters are not drawn */
-        terminal_putentryat(c, terminal_color, terminal_column, terminal_row);
-        if (terminal_column == VGA_WIDTH - 1) wrap_pending = 1;
-        else terminal_column++;
-        break;
+        if (terminal_column >= VGA_WIDTH) terminal_column = VGA_WIDTH - 1;
+        return;
+    case 0x0E: /* SO: select G1 */
+        active_g = 1;
+        return;
+    case 0x0F: /* SI: select G0 */
+        active_g = 0;
+        return;
     }
+    if (uc < 0x20) return; /* other control characters are not drawn */
+
+    if (g_graphics[active_g] && uc >= '`' && uc <= '~') uc = dec_graphics[uc - '`'];
+
+    size_t line = terminal_row * VGA_WIDTH;
+    if (insert_mode) {
+        for (size_t x = VGA_WIDTH - 1; x > terminal_column; x--) {
+            terminal_buffer[line + x] = terminal_buffer[line + x - 1];
+        }
+    }
+    terminal_buffer[line + terminal_column] = vga_entry(uc, terminal_color);
+    if (terminal_column == VGA_WIDTH - 1) wrap_pending = 1;
+    else terminal_column++;
 }
 
 static int param(int i, int def) {
@@ -179,9 +262,12 @@ static void apply_sgr(void) {
             sgr_bg = DEFAULT_BG;
             sgr_bold = 0;
             sgr_reverse = 0;
+            sgr_underline = 0;
         }
         else if (p == 1) sgr_bold = 1;
         else if (p == 22 || p == 2) sgr_bold = 0;
+        else if (p == 4) sgr_underline = 1;
+        else if (p == 24) sgr_underline = 0;
         else if (p == 7) sgr_reverse = 1;
         else if (p == 27) sgr_reverse = 0;
         else if (p >= 30 && p <= 37) sgr_fg = ansi_to_vga[p - 30];
@@ -194,13 +280,36 @@ static void apply_sgr(void) {
     update_color();
 }
 
+static void respond(const char* s) {
+    if (responder) responder(s);
+}
+
+static void report_cursor(void) {
+    char buf[16];
+    int n = 0;
+    buf[n++] = '\033';
+    buf[n++] = '[';
+    int row = terminal_row + 1, col = terminal_column + 1;
+    if (row >= 10) buf[n++] = '0' + row / 10;
+    buf[n++] = '0' + row % 10;
+    buf[n++] = ';';
+    if (col >= 10) buf[n++] = '0' + col / 10;
+    buf[n++] = '0' + col % 10;
+    buf[n++] = 'R';
+    buf[n] = '\0';
+    respond(buf);
+}
+
 static void run_csi(char c) {
     size_t here = terminal_row * VGA_WIDTH + terminal_column;
     size_t line = terminal_row * VGA_WIDTH;
     int n;
 
-    if (ansi_private) return; /* e.g. ESC[?25l: cursor visibility, ignored */
     if (c != 'm') wrap_pending = 0;
+    if (ansi_private) {
+        /* ESC[?25l/h (cursor), ?7l/h (autowrap), ?1c... : accepted, no effect */
+        return;
+    }
 
     switch (c) {
     case 'm':
@@ -211,10 +320,12 @@ static void run_csi(char c) {
         terminal_row = (terminal_row >= (size_t)n) ? terminal_row - n : 0;
         break;
     case 'B':
+    case 'e':
         n = param(0, 1);
         terminal_row = (terminal_row + n < VGA_HEIGHT) ? terminal_row + n : VGA_HEIGHT - 1;
         break;
     case 'C':
+    case 'a':
         n = param(0, 1);
         terminal_column = (terminal_column + n < VGA_WIDTH) ? terminal_column + n : VGA_WIDTH - 1;
         break;
@@ -222,7 +333,18 @@ static void run_csi(char c) {
         n = param(0, 1);
         terminal_column = (terminal_column >= (size_t)n) ? terminal_column - n : 0;
         break;
+    case 'E':
+        n = param(0, 1);
+        terminal_row = (terminal_row + n < VGA_HEIGHT) ? terminal_row + n : VGA_HEIGHT - 1;
+        terminal_column = 0;
+        break;
+    case 'F':
+        n = param(0, 1);
+        terminal_row = (terminal_row >= (size_t)n) ? terminal_row - n : 0;
+        terminal_column = 0;
+        break;
     case 'G':
+    case '`':
         n = param(0, 1);
         terminal_column = (n <= VGA_WIDTH) ? n - 1 : VGA_WIDTH - 1;
         break;
@@ -263,25 +385,49 @@ static void run_csi(char c) {
         }
         break;
     case 'X': /* erase characters in place */
-        clear_cells(here, here + param(0, 1) < line + VGA_WIDTH ? here + param(0, 1) : line + VGA_WIDTH);
-        break;
-    case 'L': /* insert lines */
         n = param(0, 1);
-        for (size_t r = VGA_HEIGHT; r-- > terminal_row;) {
-            for (size_t x = 0; x < VGA_WIDTH; x++) {
-                terminal_buffer[r * VGA_WIDTH + x] = (r >= terminal_row + n)
-                    ? terminal_buffer[(r - n) * VGA_WIDTH + x] : vga_entry(' ', terminal_color);
-            }
+        clear_cells(here, here + n < line + VGA_WIDTH ? here + n : line + VGA_WIDTH);
+        break;
+    case 'L': /* insert lines inside the scrolling region */
+        if (terminal_row >= scroll_top && terminal_row <= scroll_bottom) {
+            scroll_down(terminal_row, scroll_bottom, param(0, 1));
         }
         break;
-    case 'M': /* delete lines */
-        n = param(0, 1);
-        for (size_t r = terminal_row; r < VGA_HEIGHT; r++) {
-            for (size_t x = 0; x < VGA_WIDTH; x++) {
-                terminal_buffer[r * VGA_WIDTH + x] = (r + n < VGA_HEIGHT)
-                    ? terminal_buffer[(r + n) * VGA_WIDTH + x] : vga_entry(' ', terminal_color);
-            }
+    case 'M': /* delete lines inside the scrolling region */
+        if (terminal_row >= scroll_top && terminal_row <= scroll_bottom) {
+            scroll_up(terminal_row, scroll_bottom, param(0, 1));
         }
+        break;
+    case 'S':
+        scroll_up(scroll_top, scroll_bottom, param(0, 1));
+        break;
+    case 'T':
+        scroll_down(scroll_top, scroll_bottom, param(0, 1));
+        break;
+    case 'r': { /* set the scrolling region; the cursor goes home */
+        int top = param(0, 1) - 1;
+        int bottom = param(1, VGA_HEIGHT) - 1;
+        if (bottom >= VGA_HEIGHT) bottom = VGA_HEIGHT - 1;
+        if (top < bottom) {
+            scroll_top = top;
+            scroll_bottom = bottom;
+        }
+        terminal_row = 0;
+        terminal_column = 0;
+        break;
+    }
+    case 'h':
+        if (param(0, 0) == 4) insert_mode = 1;
+        break;
+    case 'l':
+        if (param(0, 0) == 4) insert_mode = 0;
+        break;
+    case 'n':
+        if (param(0, 0) == 6) report_cursor();
+        else if (param(0, 0) == 5) respond("\033[0n");
+        break;
+    case 'c':
+        respond("\033[?6c"); /* "I am a VT102", as the Linux console says */
         break;
     case 's':
         saved_row = terminal_row;
@@ -294,60 +440,113 @@ static void run_csi(char c) {
     }
 }
 
-/* Intercepts characters to parse ANSI escapes */
-void terminal_putchar(char c)
+/* Feed one byte to the emulator, exactly as a terminal receives it */
+void terminal_emit(char c)
 {
-    if (ansi_state == ANSI_NORMAL) {
+    switch (ansi_state) {
+    case ANSI_NORMAL:
         if (c == '\033') ansi_state = ANSI_ESC;
-        else terminal_putchar_raw(c);
+        else put_raw(c);
         return;
-    }
 
-    if (ansi_state == ANSI_ESC) {
+    case ANSI_CHARSET:
+        g_graphics[charset_target] = (c == '0');
         ansi_state = ANSI_NORMAL;
-        if (c == '[') {
+        return;
+
+    case ANSI_SKIP:
+        if (--skip_count <= 0) ansi_state = ANSI_NORMAL;
+        return;
+
+    case ANSI_OSC:
+        /* Linux palette sequences: ESC ] R (reset) and ESC ] P nrrggbb;
+           anything else runs to BEL or ESC \ */
+        if (c == 'R') ansi_state = ANSI_NORMAL;
+        else if (c == 'P') { ansi_state = ANSI_SKIP; skip_count = 7; }
+        else if (c == '\a') ansi_state = ANSI_NORMAL;
+        else if (c == '\033') ansi_state = ANSI_ESC;
+        return;
+
+    case ANSI_ESC:
+        ansi_state = ANSI_NORMAL;
+        switch (c) {
+        case '[':
             ansi_state = ANSI_CSI;
             ansi_param_count = 0;
             ansi_current_param = 0;
             ansi_have_digit = 0;
             ansi_private = 0;
             for (int i = 0; i < MAX_PARAMS; i++) ansi_params[i] = 0;
-        } else if (c == '7') {
+            break;
+        case '(':
+        case ')':
+            charset_target = (c == ')');
+            ansi_state = ANSI_CHARSET;
+            break;
+        case ']':
+            ansi_state = ANSI_OSC;
+            break;
+        case '7':
             saved_row = terminal_row;
             saved_column = terminal_column;
-        } else if (c == '8') {
+            break;
+        case '8':
             terminal_row = saved_row;
             terminal_column = saved_column;
-        } else if (c == 'c') {
-            sgr_fg = DEFAULT_FG;
-            sgr_bg = DEFAULT_BG;
-            sgr_bold = 0;
-            sgr_reverse = 0;
-            update_color();
+            wrap_pending = 0;
+            break;
+        case 'D':
+            line_feed();
+            break;
+        case 'E':
+            terminal_column = 0;
+            line_feed();
+            break;
+        case 'M':
+            reverse_line_feed();
+            break;
+        case 'c':
+            reset_state();
             terminal_clear();
+            break;
+        case 'Z':
+            respond("\033[?6c");
+            break;
+        /* ESC H (tab stop), ESC = / ESC > (keypad modes), ESC \ : ignored */
         }
-        /* Anything else (charset selection etc.) is ignored */
+        return;
+
+    case ANSI_CSI:
+        if (c >= '0' && c <= '9') {
+            ansi_current_param = (ansi_current_param * 10) + (c - '0');
+            ansi_have_digit = 1;
+        } else if (c == ';') {
+            if (ansi_param_count < MAX_PARAMS) ansi_params[ansi_param_count++] = ansi_current_param;
+            ansi_current_param = 0;
+            ansi_have_digit = 0;
+        } else if (c == '?' || c == '>' || c == '=') {
+            ansi_private = 1;
+        } else if (c == '[') {
+            /* ESC [ [ x: Linux function-key echo, swallow one byte */
+            ansi_state = ANSI_SKIP;
+            skip_count = 1;
+        } else if (c >= 0x40 && c <= 0x7E) {
+            if ((ansi_have_digit || ansi_param_count > 0) && ansi_param_count < MAX_PARAMS) {
+                ansi_params[ansi_param_count++] = ansi_current_param;
+            }
+            run_csi(c);
+            ansi_state = ANSI_NORMAL;
+        }
+        /* Intermediate bytes are ignored */
         return;
     }
+}
 
-    /* ANSI_CSI */
-    if (c >= '0' && c <= '9') {
-        ansi_current_param = (ansi_current_param * 10) + (c - '0');
-        ansi_have_digit = 1;
-    } else if (c == ';') {
-        if (ansi_param_count < MAX_PARAMS) ansi_params[ansi_param_count++] = ansi_current_param;
-        ansi_current_param = 0;
-        ansi_have_digit = 0;
-    } else if (c == '?' || c == '>' || c == '=') {
-        ansi_private = 1;
-    } else if (c >= 0x40 && c <= 0x7E) {
-        if ((ansi_have_digit || ansi_param_count > 0) && ansi_param_count < MAX_PARAMS) {
-            ansi_params[ansi_param_count++] = ansi_current_param;
-        }
-        run_csi(c);
-        ansi_state = ANSI_NORMAL;
-    }
-    /* Intermediate bytes are ignored */
+/* Kernel output: '\n' starts a new line (carriage return + line feed) */
+void terminal_putchar(char c)
+{
+    if (c == '\n' && ansi_state == ANSI_NORMAL) terminal_emit('\r');
+    terminal_emit(c);
 }
 
 void terminal_write(const char* data, size_t size)

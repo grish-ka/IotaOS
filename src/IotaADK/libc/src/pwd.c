@@ -164,3 +164,12 @@ struct group *getgrnam(const char *name) {
     }
     return NULL;
 }
+
+int getgrouplist(const char *user, gid_t group, gid_t *groups, int *ngroups) {
+    (void)user;
+    int room = *ngroups;
+    *ngroups = 1;
+    if (room < 1) return -1;
+    groups[0] = group;
+    return 1;
+}

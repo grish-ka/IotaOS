@@ -65,9 +65,7 @@ int chmod(const char *pathname, mode_t mode) {
 }
 
 int fchmod(int fd, mode_t mode) {
-    (void)fd;
-    (void)mode;
-    return 0;
+    return check(iota_syscall3(IOTA_SYS_FCHMOD, fd, mode, 0));
 }
 
 int mknod(const char *pathname, mode_t mode, dev_t dev) {
@@ -86,4 +84,37 @@ mode_t umask(mode_t mask) {
 
 int mkdir(const char *pathname, mode_t mode) {
     return check(iota_syscall3(IOTA_SYS_MKDIR, (uint32_t)pathname, mode & ~current_umask & 07777, 0));
+}
+
+#include <utime.h>
+#include <fcntl.h>
+#include <sys/time.h>
+#include <time.h>
+
+int utime(const char *path, const struct utimbuf *times) {
+    return check(iota_syscall3(IOTA_SYS_UTIME, (uint32_t)path, times ? (uint32_t)times->modtime : 0, 0));
+}
+
+__attribute__((weak)) int utimes(const char *path, const struct timeval times[2]) {
+    return check(iota_syscall3(IOTA_SYS_UTIME, (uint32_t)path, times ? (uint32_t)times[1].tv_sec : 0, 0));
+}
+
+__attribute__((weak)) int futimes(int fd, const struct timeval times[2]) {
+    return check(iota_syscall3(IOTA_SYS_FUTIME, fd, times ? (uint32_t)times[1].tv_sec : 0, 0));
+}
+
+__attribute__((weak)) int futimens(int fd, const struct timespec times[2]) {
+    uint32_t mtime = 0;
+    if (times && times[1].tv_nsec != UTIME_NOW) {
+        if (times[1].tv_nsec == UTIME_OMIT) return 0;
+        mtime = (uint32_t)times[1].tv_sec;
+    }
+    return check(iota_syscall3(IOTA_SYS_FUTIME, fd, mtime, 0));
+}
+
+__attribute__((weak)) int mkfifo(const char *path, mode_t mode) {
+    (void)path;
+    (void)mode;
+    errno = EPERM;
+    return -1;
 }

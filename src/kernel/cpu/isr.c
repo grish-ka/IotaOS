@@ -56,59 +56,58 @@ static void panic_write_hex(const char *label, uint32_t value) {
     terminal_writestring("\n");
 }
 
-/* The master function that all 32 assembly wrappers will call */
-void fault_handler(registers_t *regs) {
-    /* Set our beautiful Blue Screen of Death colors! */
+/*
+ * Draw the blue screen for regs and wait for F1 to reboot. title names the
+ * cause; err_code is shown as the error code (a CPU one, or one chosen by a
+ * program through SYS_PANIC).
+ */
+void bsod(const char* title, uint32_t err_code, registers_t *regs) {
     terminal_setcolor(15 | 1 << 4); /* White text (15) on Blue (1) */
     terminal_clear();
-    
+
     terminal_writestring("\n==================================================\n");
     terminal_writestring("                  KERNEL PANIC                      \n");
     terminal_writestring("==================================================\n");
-    
-    /* Dynamically print which error caused the crash! */
+
     terminal_writestring(" Exception: ");
-    if (regs->int_no < 32) {
-        terminal_writestring(exception_messages[regs->int_no]);
-    } else {
-        terminal_writestring("Unknown Exception");
-    }
+    terminal_writestring(title);
     terminal_writestring("\n");
     if (regs->int_no == 14) {
         uint32_t cr2;
         __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
         panic_write_hex(" Fault address (CR2): ", cr2);
     }
+    /* A GPF whose error code points into the IDT names the interrupt vector */
+    if (regs->int_no == 13 && (err_code & 2)) {
+        panic_write_hex(" IDT vector: ", err_code >> 3);
+        terminal_writestring(err_code & 1 ? "  (raised by hardware)\n" : "  (raised by software)\n");
+    }
     panic_write_hex(" EIP:        ", regs->eip);
-    panic_write_hex(" Error code: ", regs->err_code);
+    panic_write_hex(" Error code: ", err_code);
     panic_write_hex(" ESP:        ", regs->esp);
     panic_write_hex(" User ESP:   ", regs->useresp);
     terminal_writestring(" The system has been halted to prevent damage.\n");
     terminal_writestring("Press F1 to reboot...\n");
-    
+
     /* --- HARDWARE POLLING FOR F1 --- */
 
     /* 1. Flush out any old garbage (like the Enter key you just pressed) */
     while (inb(0x64) & 1) {
         inb(0x60);
     }
-    
-    /* 2. Wait in an infinite loop until F1 (0x3B) is pressed */
+
+    /* 2. Wait until F1 (0x3B) is pressed */
     while (1) {
-        /* If the keyboard controller says a key is ready... */
-        if (inb(0x64) & 1) {
-            uint8_t scancode = inb(0x60); /* Read the key */
-            
-            /* Check if it's the F1 key (0x3B) */
-            if (scancode == 0x3B) {
-                break; /* F1 was pressed! Break the loop and proceed to reboot */
-            }
-        }
+        if ((inb(0x64) & 1) && inb(0x60) == 0x3B) break;
     }
 
-    /* Now we can safely reboot! */
     reboot();
-    
+    for (;;) __asm__ volatile("cli; hlt");
+}
+
+/* The master function that all 32 assembly wrappers will call */
+void fault_handler(registers_t *regs) {
+    bsod(regs->int_no < 32 ? exception_messages[regs->int_no] : "Unknown Exception", regs->err_code, regs);
 }
 
 extern uint32_t timer_handler(uint32_t esp); /* <--- Updated signature */
@@ -133,6 +132,21 @@ uint32_t irq_handler(uint32_t esp) {
     /* task_yield(): a software interrupt, so no tick and no EOI */
     if (regs->int_no == 129) {
         return task_schedule(esp);
+    }
+
+    /*
+     * Spurious IRQ 7 / IRQ 15: the PIC raises these for noise on the line,
+     * even when masked. If the line is not really in service, it must not
+     * get an end-of-interrupt (for IRQ 15 the master still needs one, for
+     * the cascade on IRQ 2).
+     */
+    if (regs->int_no == 39 || regs->int_no == 47) {
+        uint16_t pic = (regs->int_no == 39) ? 0x20 : 0xA0;
+        outb(pic, 0x0B);                     /* OCW3: read the in-service register */
+        if (!(inb(pic) & 0x80)) {
+            if (regs->int_no == 47) outb(0x20, 0x20);
+            return esp;
+        }
     }
 
     /* Send the "End of Interrupt" (EOI) signal to the PIC.

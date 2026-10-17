@@ -99,6 +99,37 @@ irq1:
     pushl $33       /* IDT Entry 33 */
     jmp irq_common_stub
 
+/* IRQs 2-15 (vectors 34-47): nothing uses them, but real hardware can still
+   raise them (notably spurious IRQ 7 and 15), so each needs a handler */
+.macro IRQ num, vector
+.global irq\num
+irq\num:
+    cli
+    pushl $0
+    pushl $\vector
+    jmp irq_common_stub
+.endm
+
+IRQ 2, 34
+IRQ 3, 35
+IRQ 4, 36
+IRQ 5, 37
+IRQ 6, 38
+IRQ 7, 39
+IRQ 8, 40
+IRQ 9, 41
+IRQ 10, 42
+IRQ 11, 43
+IRQ 12, 44
+IRQ 13, 45
+IRQ 14, 46
+IRQ 15, 47
+
+/* Any other vector nobody installed: return without touching anything */
+.global unexpected_interrupt
+unexpected_interrupt:
+    iret
+
 /* Voluntary reschedule ('int $0x81'): like the timer, minus the tick and EOI */
 .global irq129
 irq129:

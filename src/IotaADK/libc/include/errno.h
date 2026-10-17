@@ -52,5 +52,37 @@ extern int errno;
 #define ENOTEMPTY     39  /* Directory not empty */
 #define ELOOP         40  /* Too many levels of symbolic links */
 #define EWOULDBLOCK  EAGAIN
+#define ENOMSG        42  /* No message of desired type */
+#define EOVERFLOW     75  /* Value too large for defined data type */
+#define EILSEQ        84  /* Invalid or incomplete multibyte or wide character */
+#define ENOTSOCK      88  /* Socket operation on non-socket */
+#define EOPNOTSUPP    95  /* Operation not supported */
+#define ENOTSUP       EOPNOTSUPP
+#define EAFNOSUPPORT  97  /* Address family not supported by protocol */
+#define EADDRINUSE    98  /* Address already in use */
+#define EADDRNOTAVAIL 99  /* Cannot assign requested address */
+#define ENETDOWN     100  /* Network is down */
+#define ENETUNREACH  101  /* Network is unreachable */
+#define ECONNABORTED 103  /* Software caused connection abort */
+#define ECONNRESET   104  /* Connection reset by peer */
+#define ENOBUFS      105  /* No buffer space available */
+#define EISCONN      106  /* Transport endpoint is already connected */
+#define ENOTCONN     107  /* Transport endpoint is not connected */
+#define ECONNREFUSED 111  /* Connection refused */
+#define EHOSTUNREACH 113  /* No route to host */
+#define EALREADY     114  /* Operation already in progress */
+#define EINPROGRESS  115  /* Operation now in progress */
+#define EPROTONOSUPPORT 93 /* Protocol not supported */
+#define ESOCKTNOSUPPORT 94 /* Socket type not supported */
+#define EPROTOTYPE    91  /* Protocol wrong type for socket */
+#define ENOPROTOOPT   92  /* Protocol not available */
+#define EMSGSIZE      90  /* Message too long */
+#define EDESTADDRREQ  89  /* Destination address required */
+#define ETIMEDOUT    110  /* Connection timed out */
+#define EFTYPE       EINVAL  /* BSD: inappropriate file type or format */
+
+/* glibc extensions */
+extern char *program_invocation_name;
+extern char *program_invocation_short_name;
 
 #endif

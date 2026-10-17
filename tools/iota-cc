@@ -1,0 +1,28 @@
+#!/bin/sh
+#
+# IotaOS - iota-cc
+# Copyright (c) 2026 grish-ka
+# Licensed under the MIT License.
+#
+# C compiler driver for IotaOS programs, for ./configure-based ports:
+#   CC=tools/iota-cc ./configure --host=i686-elf ...
+# Compiling uses IotaOS's libc headers; linking adds the start-up code, the
+# program linker script, libc and libgcc. Extra libraries (termcap, z) are
+# found in build/sysroot/lib.
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+CC=${IOTA_TARGET_CC:-i686-elf-gcc}
+INC="-isystem $ROOT/build/sysroot/include -isystem $ROOT/src/IotaADK/libc/include -isystem $ROOT/src/IotaADK/include"
+
+link=1
+for arg in "$@"; do
+    case "$arg" in
+        -c|-S|-E|-M|-MM) link=0 ;;
+    esac
+done
+
+if [ $link = 0 ]; then
+    exec $CC -fno-pie -fno-pic $INC "$@"
+fi
+exec $CC -fno-pie -fno-pic $INC -nostdlib -T "$ROOT/src/IotaADK/lib/linker.ld" \
+    "$ROOT/build/crt0.o" "$@" -L"$ROOT/build/sysroot/lib" -L"$ROOT/build" -lc -lgcc

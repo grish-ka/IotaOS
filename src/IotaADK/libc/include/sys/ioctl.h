@@ -14,6 +14,8 @@ struct winsize {
 /* Request numbers follow Linux, matching TCGETS/TCSETS in the kernel tty driver */
 #define TCGETS     0x5401
 #define TCSETS     0x5402
+#define TIOCGPGRP  0x540F
+#define TIOCSPGRP  0x5410
 #define TIOCGWINSZ 0x5413
 #define TIOCSWINSZ 0x5414
 

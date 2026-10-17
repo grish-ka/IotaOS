@@ -13,7 +13,10 @@
 
 #define EOF (-1)
 
+#ifndef __FILE_defined
+#define __FILE_defined
 typedef struct _FILE FILE;
+#endif
 extern FILE *stdin;
 extern FILE *stdout;
 extern FILE *stderr;
@@ -42,9 +45,15 @@ int vfprintf(FILE *stream, const char *format, va_list ap);
 int vsprintf(char *str, const char *format, va_list ap);
 int vsnprintf(char *str, size_t size, const char *format, va_list ap);
 int fscanf(FILE *stream, const char *format, ...);
+int sscanf(const char *str, const char *format, ...);
+int scanf(const char *format, ...);
+int vfscanf(FILE *stream, const char *format, va_list ap);
+int vsscanf(const char *str, const char *format, va_list ap);
+int vscanf(const char *format, va_list ap);
 
 FILE *fopen(const char *pathname, const char *mode);
 FILE *fdopen(int fd, const char *mode);
+FILE *freopen(const char *path, const char *mode, FILE *stream);
 int fclose(FILE *stream);
 int fflush(FILE *stream);
 int fileno(FILE *stream);
@@ -53,6 +62,8 @@ int ferror(FILE *stream);
 void clearerr(FILE *stream);
 int rename(const char *oldpath, const char *newpath);
 int remove(const char *pathname);
+FILE *popen(const char *command, const char *type);
+int pclose(FILE *stream);
 void perror(const char *s);
 int setvbuf(FILE *stream, char *buf, int mode, size_t size);
 void setbuf(FILE *stream, char *buf);
@@ -63,6 +74,10 @@ void rewind(FILE *stream);
 ssize_t getline(char **lineptr, size_t *n, FILE *stream);
 ssize_t getdelim(char **lineptr, size_t *n, int delim, FILE *stream);
 int dprintf(int fd, const char *format, ...);
+int fseeko(FILE *stream, off_t offset, int whence);
+off_t ftello(FILE *stream);
+int vasprintf(char **strp, const char *fmt, va_list ap);
+int asprintf(char **strp, const char *fmt, ...);
 
 #define BUFSIZ 1024
 #define _IOFBF 0

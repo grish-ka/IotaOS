@@ -39,12 +39,25 @@ LIBC_OBJECTS = $(patsubst $(LIBC_DIR)/src/%.c, $(BUILD_DIR)/libc_%.o, $(LIBC_SOU
 APP_BINARIES = $(patsubst $(APPS_DIR)/%.c, $(BIN_DIR)/%, $(APP_SOURCES)) \
 		$(patsubst $(CORE_DIR)/%.c, $(BIN_DIR)/%, $(CORE_SOURCES))
 
+# Third-party sources (downloaded, not in git): Bash, zlib, mandoc
+GNU_DIR = ./src/gnu
+ZLIB_VER = 1.3.1
+ZLIB_SRC = $(GNU_DIR)/zlib-$(ZLIB_VER)
+ZLIB_TAR = $(GNU_DIR)/zlib-$(ZLIB_VER).tar.gz
+ZLIB_OBJS = adler32 crc32 deflate infback inffast inflate inftrees trees zutil \
+	compress uncompr gzclose gzlib gzread gzwrite
+MANDOC_VER = 1.14.6
+MANDOC_SRC = $(GNU_DIR)/mandoc-$(MANDOC_VER)
+MANDOC_TAR = $(GNU_DIR)/mandoc-$(MANDOC_VER).tar.gz
+HOST_MANDOC_DIR = $(BUILD_DIR)/host-mandoc
+HOST_MAKEWHATIS = $(HOST_MANDOC_DIR)/makewhatis
+
 # Root filesystem image: rootfs/ (config files) + programs, as a ustar initrd
 ROOTFS_SRC = rootfs
 ROOT = $(BUILD_DIR)/initrd_root
 INITRD = $(BUILD_DIR)/iso/boot/initrd.img
 # Extra names for programs, as NAME:TARGET hard links in /bin
-BIN_LINKS = less:more printenv:env poweroff:reboot halt:reboot shutdown:reboot fgrep:grep egrep:grep sh:bash
+BIN_LINKS = man:mandoc apropos:mandoc whatis:mandoc makewhatis:mandoc poweroff:reboot halt:reboot shutdown:reboot awk:gawk gunzip:gzip zcat:gzip sh:bash
 
 all: $(BUILD_DIR)/IotaOS $(BUILD_DIR)/libc.a $(APP_BINARIES)
 
@@ -90,7 +103,7 @@ $(BIN_DIR)/%: $(CORE_DIR)/%.c $(CORE_DIR)/common.h $(BUILD_DIR)/crt0.o $(ADK_DIR
 	$(STRIP) $@
 
 # --- ROOT FILESYSTEM & ISO ---
-initrd: all bash-vfs
+initrd: all bash-vfs ports $(BIN_DIR)/mandoc $(HOST_MAKEWHATIS)
 	@echo "Assembling root filesystem..."
 	rm -rf $(ROOT)
 	mkdir -p $(ROOT)/bin $(ROOT)/dev $(ROOT)/etc $(ROOT)/home $(ROOT)/mnt $(ROOT)/root \
@@ -102,6 +115,7 @@ initrd: all bash-vfs
 		if [ -f $(ROOT)/bin/$$target ]; then ln -f $(ROOT)/bin/$$target $(ROOT)/bin/$$name; fi; \
 	done
 	ln -f $(ROOT)/bin/env $(ROOT)/usr/bin/env
+	$(HOST_MAKEWHATIS) $(ROOT)/usr/share/man
 	chmod 4755 $(ROOT)/bin/su $(ROOT)/bin/sudo
 	chmod 700 $(ROOT)/root
 	chmod 1777 $(ROOT)/tmp
@@ -122,6 +136,11 @@ run: iso
 debug: iso
 	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -serial stdio
 
+# Start frozen, with the QEMU monitor on this terminal: type `c` to run,
+# `stop` to pause again, `info registers` / `x/16x ADDR` to inspect, `quit` to exit
+pause: iso
+	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -S -monitor stdio
+
 sync:
 	@chmod +x tools/sync_tasks.sh
 	@./tools/sync_tasks.sh
@@ -132,7 +151,6 @@ clean:
 	rm -rf $(ALL_OBJECTS) $(BUILD_DIR)
 
 # --- GNU TOOLCHAIN PORTING ---
-GNU_DIR = ./src/gnu
 BASH_VER = 5.2.21
 BASH_SRC = $(GNU_DIR)/bash-$(BASH_VER)
 BASH_TAR = bash-$(BASH_VER).tar.gz
@@ -167,6 +185,7 @@ gnu-bash: $(BUILD_DIR)/libc.a $(BUILD_DIR)/crt0.o
 	sed -i 's/#define clock_t long/\/\* patched clock_t \*\//g' $(BASH_SRC)/config.h
 	sed -i 's/#define sigset_t int/\/\* patched sigset_t \*\//g' $(BASH_SRC)/config.h
 	sed -i 's/#define sig_atomic_t int/\/\* patched sig_atomic_t \*\//g' $(BASH_SRC)/config.h
+	sed -i 's/#define socklen_t unsigned int/\/\* patched socklen_t \*\//g' $(BASH_SRC)/config.h
 	sed -i 's/<sgtty.h>/<termios.h>/g' $(BASH_SRC)/include/shtty.h
 	sed -i 's/#define uintptr_t unsigned int/\/\* patched uintptr_t \*\//g' $(BASH_SRC)/config.h
 	@echo "extern char *shell_input_line_property;" >> $(BASH_SRC)/config.h
@@ -230,4 +249,61 @@ bash-vfs: $(BUILD_DIR)/libc.a $(BUILD_DIR)/crt0.o
 		$(STRIP) -o $(BASH_VFS) $(BASH_BIN); \
 	fi
 
-.PHONY: all gnu-all gnu-bash clean clean-gnu run debug sync bash-vfs initrd iso
+# --- OFFICIAL GNU / UTILITY PORTS ---
+# less, more, sed, grep, awk, diff, gzip, tar, coreutils and findutils are the
+# real packages, cross-compiled by tools/build-ports.sh into build/bin.
+# The stamp is renewed (programs relinked) whenever libc or the tooling changes.
+$(BIN_DIR)/.ports: $(BUILD_DIR)/libc.a $(BUILD_DIR)/crt0.o tools/build-ports.sh tools/build-port.sh \
+		tools/iota-cc tools/iota-config.site
+	@mkdir -p $(BIN_DIR)
+	PATH="$(PATH)" tools/build-ports.sh
+	touch $@
+
+ports: $(BIN_DIR)/.ports
+
+# --- MANUAL PAGES: zlib + mandoc ---
+# mandoc provides man/apropos/whatis and reads the gzipped pages in
+# rootfs/usr/share/man. A second, native mandoc builds their search database
+# (mandoc.db) while the root filesystem is assembled.
+
+$(ZLIB_TAR):
+	@mkdir -p $(GNU_DIR)
+	wget -q -O $@ https://zlib.net/fossils/zlib-$(ZLIB_VER).tar.gz
+
+$(ZLIB_SRC)/zlib.h: $(ZLIB_TAR)
+	tar -xzf $< -C $(GNU_DIR)
+	touch $@
+
+$(BUILD_DIR)/libz.a: $(ZLIB_SRC)/zlib.h
+	@mkdir -p $(BUILD_DIR)/zlib
+	for f in $(ZLIB_OBJS); do \
+		$(CC) -c -O2 -ffreestanding -fno-pie -fno-pic -I$(LIBC_DIR)/include -I$(ADK_DIR)/include \
+			$(ZLIB_SRC)/$$f.c -o $(BUILD_DIR)/zlib/$$f.o || exit 1; \
+	done
+	rm -f $@
+	$(AR) rcs $@ $(BUILD_DIR)/zlib/*.o
+
+$(MANDOC_TAR):
+	@mkdir -p $(GNU_DIR)
+	wget -q -O $@ https://mandoc.bsd.lv/snapshots/mandoc-$(MANDOC_VER).tar.gz
+
+$(MANDOC_SRC)/configure: $(MANDOC_TAR)
+	tar -xzf $< -C $(GNU_DIR)
+	touch $@
+
+$(BIN_DIR)/mandoc: $(MANDOC_SRC)/configure tools/mandoc.configure.local $(BUILD_DIR)/libz.a $(BUILD_DIR)/libc.a $(BUILD_DIR)/crt0.o
+	@mkdir -p $(BIN_DIR)
+	sed 's|@ROOT@|$(abspath .)|g' tools/mandoc.configure.local > $(MANDOC_SRC)/configure.local
+	cd $(MANDOC_SRC) && ./configure > configure.out 2>&1 && rm -f mandoc && $(MAKE) mandoc
+	$(STRIP) -o $@ $(MANDOC_SRC)/mandoc
+
+# Native build for the machine running make (needs the host's zlib headers)
+$(HOST_MAKEWHATIS): $(MANDOC_SRC)/configure
+	rm -rf $(HOST_MANDOC_DIR)
+	mkdir -p $(HOST_MANDOC_DIR)
+	cd $(MANDOC_SRC) && find . -maxdepth 1 -type f ! -name configure.local ! -name config.h \
+		! -name Makefile.local ! -name '*.o' ! -name '*.a' ! -name mandoc -exec cp {} $(abspath $(HOST_MANDOC_DIR))/ \;
+	cd $(HOST_MANDOC_DIR) && CC=gcc ./configure > configure.out 2>&1 && $(MAKE) mandoc
+	ln -sf mandoc $@
+
+.PHONY: pause ports all gnu-all gnu-bash clean clean-gnu run debug sync bash-vfs initrd iso

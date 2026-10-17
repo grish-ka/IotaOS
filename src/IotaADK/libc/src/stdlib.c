@@ -7,6 +7,7 @@
 #include "stdlib.h"
 #include "string.h"
 #include "iota.h"
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -140,6 +141,15 @@ char* getenv(const char* name) {
     return NULL;
 }
 
+/* The program's name, as glibc provides it (set from argv[0] at start-up) */
+char *program_invocation_name = "";
+char *program_invocation_short_name = "";
+char *__progname = "";
+
+__attribute__((weak)) const char *getprogname(void) {
+    return program_invocation_short_name;
+}
+
 extern int main(int argc, char* argv[], char* envp[]);
 
 /* The entry point called by crt0.o */
@@ -162,6 +172,10 @@ void libc_entry(void) {
         argc = 1;
     }
     argv[argc] = NULL;
+
+    program_invocation_name = argv[0];
+    program_invocation_short_name = strrchr(argv[0], '/') ? strrchr(argv[0], '/') + 1 : argv[0];
+    __progname = program_invocation_short_name;
 
     iota_get_env(raw_env);
     int envc = 0;
@@ -246,6 +260,24 @@ int rand(void) {
 
 void srand(unsigned int seed) {
     rand_state = seed;
+}
+
+int mkstemp(char *template) {
+    size_t len = strlen(template);
+    if (len < 6 || strcmp(template + len - 6, "XXXXXX") != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    char saved[6];
+    memcpy(saved, template + len - 6, 6);
+    for (int tries = 0; tries < 100; tries++) {
+        memcpy(template + len - 6, saved, 6);
+        mktemp(template);
+        int fd = open(template, O_RDWR | O_CREAT | O_EXCL, 0600);
+        if (fd >= 0 || errno != EEXIST) return fd;
+    }
+    errno = EEXIST;
+    return -1;
 }
 
 char *mktemp(char *template) {
@@ -536,4 +568,18 @@ char *realpath(const char *path, char *resolved) {
     if (!resolved) resolved = malloc(o + 1);
     if (resolved) strcpy(resolved, out);
     return resolved;
+}
+
+/* Weak: bash carries its own strtoumax */
+__attribute__((weak)) uintmax_t strtoumax(const char *nptr, char **endptr, int base) {
+    return strtoull(nptr, endptr, base);
+}
+
+/* long double is computed in double precision */
+long double strtold(const char *nptr, char **endptr) {
+    return strtod(nptr, endptr);
+}
+
+float strtof(const char *nptr, char **endptr) {
+    return (float)strtod(nptr, endptr);
 }

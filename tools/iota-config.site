@@ -1,0 +1,28 @@
+# IotaOS - config.site for cross-compiling GNU packages
+# (used as CONFIG_SITE by tools/build-port.sh)
+#
+# Answers that configure cannot find out by running test programs, because
+# the programs it builds are IotaOS binaries that cannot run on the build
+# machine.
+
+# Only the "C" locale exists
+gt_cv_locale_fr=none
+gt_cv_locale_fr_utf8=none
+gt_cv_locale_ja=none
+gt_cv_locale_zh_CN=none
+gt_cv_locale_tr_utf8=none
+gt_cv_locale_en_utf8=none
+gl_cv_func_setlocale_works=yes
+
+# Binaries are static and there is no dynamic loader
+enable_shared=no
+
+# Streams are unbuffered apart from one ungetc() byte, which fflush() and
+# fseek() give back, so input flushing behaves as POSIX requires
+gl_cv_func_fflush_stdin=yes
+
+# Real getgroups(), lchown() and fchown() exist in IotaOS's libc
+ac_cv_func_getgroups=yes
+gl_cv_func_getgroups_works=yes
+ac_cv_func_lchown=yes
+ac_cv_func_fchown=yes

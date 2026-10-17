@@ -9,6 +9,18 @@
 .extern libc_entry
 
 _start:
+    /*
+     * IotaOS programs run in ring 0. If the CPL in CS is not 0, this binary
+     * was started by another OS (e.g. a configure test run on a Linux build
+     * machine): exit at once with status 127 using the Linux exit call.
+     */
+    mov %cs, %ax
+    test $3, %ax
+    jz 1f
+    mov $1, %eax
+    mov $127, %ebx
+    int $0x80
+1:
     /* Set up a standard stack frame and align the stack to 16 bytes for GCC */
     push %ebp
     mov %esp, %ebp

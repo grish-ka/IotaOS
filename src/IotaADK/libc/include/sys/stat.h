@@ -8,6 +8,7 @@
 #define _SYS_STAT_H
 
 #include <sys/types.h>
+#include <time.h>
 
 struct stat {
     int st_dev;
@@ -67,6 +68,18 @@ struct stat {
 int stat(const char *pathname, struct stat *statbuf);
 int lstat(const char *pathname, struct stat *statbuf);
 int chmod(const char *pathname, mode_t mode);
+
+struct timespec;
+#define UTIME_NOW  ((1l << 30) - 1l)
+#define UTIME_OMIT ((1l << 30) - 2l)
+int utimensat(int dirfd, const char *path, const struct timespec times[2], int flags);
+int futimens(int fd, const struct timespec times[2]);
+int fchmodat(int dirfd, const char *path, mode_t mode, int flags);
+int fstatat(int dirfd, const char *path, struct stat *buf, int flags);
+int mkdirat(int dirfd, const char *path, mode_t mode);
+int mkfifo(const char *path, mode_t mode);
+int mkfifoat(int dirfd, const char *path, mode_t mode);
+int mknodat(int dirfd, const char *path, mode_t mode, dev_t dev);
 int fstat(int fd, struct stat *statbuf);
 mode_t umask(mode_t mask);
 int fchmod(int fd, mode_t mode);

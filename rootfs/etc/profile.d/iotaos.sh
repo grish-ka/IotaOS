@@ -1,4 +1,5 @@
 # IotaOS environment
 export HOSTNAME="$(hostname)"
 export EDITOR=nano
-export PAGER=more
+export PAGER=less
+export MANPAGER="less -R"

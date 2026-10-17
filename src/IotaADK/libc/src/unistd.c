@@ -8,6 +8,7 @@
 #include "signal.h"
 #include "iota.h"
 #include <errno.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -17,6 +18,7 @@
 #include <sys/stat.h>
 #include <sys/select.h>
 #include <sys/wait.h>
+#include <poll.h>
 
 /* Kernel calls return -errno on failure */
 static int check(int r) {
@@ -101,6 +103,10 @@ int chdir(const char *path) {
     return check(iota_syscall3(IOTA_SYS_CHDIR, (uint32_t)path, 0, 0));
 }
 
+int fchdir(int fd) {
+    return check(iota_syscall3(IOTA_SYS_FCHDIR, fd, 0, 0));
+}
+
 char *getcwd(char *buf, size_t size) {
     char path[256];
     iota_getcwd(path);
@@ -150,6 +156,15 @@ ssize_t readlink(const char *path, char *buf, size_t bufsiz) {
     if (stat(path, &st) < 0) return -1;
     errno = EINVAL; /* nothing is a symlink */
     return -1;
+}
+
+__attribute__((weak)) int fchown(int fd, uid_t owner, gid_t group) {
+    return check(iota_syscall3(IOTA_SYS_FCHOWN, fd, owner, group));
+}
+
+/* There are no symbolic links, so lchown is chown */
+__attribute__((weak)) int lchown(const char *path, uid_t owner, gid_t group) {
+    return chown(path, owner, group);
 }
 
 int chown(const char *path, uid_t owner, gid_t group) {
@@ -229,6 +244,57 @@ int execvp(const char *file, char *const argv[]) {
     return -1;
 }
 
+int execvpe(const char *file, char *const argv[], char *const envp[]) {
+    char **saved = environ;
+    environ = (char **)envp;
+    execvp(file, argv);
+    environ = saved;
+    return -1;
+}
+
+#define MAX_EXEC_ARGS 64
+
+/* Collect a NULL-terminated variadic argument list after arg0 */
+static int collect_args(char **argv, const char *arg0, va_list ap) {
+    int n = 0;
+    argv[n++] = (char *)arg0;
+    while (n < MAX_EXEC_ARGS) {
+        char *a = va_arg(ap, char *);
+        argv[n++] = a;
+        if (!a) return 0;
+    }
+    errno = E2BIG;
+    return -1;
+}
+
+int execl(const char *path, const char *arg0, ...) {
+    char *argv[MAX_EXEC_ARGS + 1];
+    va_list ap;
+    va_start(ap, arg0);
+    int r = collect_args(argv, arg0, ap);
+    va_end(ap);
+    return r < 0 ? -1 : execv(path, argv);
+}
+
+int execlp(const char *file, const char *arg0, ...) {
+    char *argv[MAX_EXEC_ARGS + 1];
+    va_list ap;
+    va_start(ap, arg0);
+    int r = collect_args(argv, arg0, ap);
+    va_end(ap);
+    return r < 0 ? -1 : execvp(file, argv);
+}
+
+int execle(const char *path, const char *arg0, ...) {
+    char *argv[MAX_EXEC_ARGS + 1];
+    va_list ap;
+    va_start(ap, arg0);
+    int r = collect_args(argv, arg0, ap);
+    char **envp = va_arg(ap, char **);
+    va_end(ap);
+    return r < 0 ? -1 : execve(path, argv, envp);
+}
+
 pid_t waitpid(pid_t pid, int *status, int options) {
     int st = 0;
     int r = iota_syscall3(IOTA_SYS_WAITPID, pid, (uint32_t)&st, (options & WNOHANG) != 0);
@@ -268,10 +334,18 @@ int setgid(gid_t gid) {
 
 /* No job control: every process is in one session and group */
 pid_t getpgrp(void) { return 1; }
+pid_t getpgid(pid_t pid) { (void)pid; return 1; }
 pid_t setsid(void) { return getpid(); }
 int setpgid(pid_t pid, pid_t pgid) { (void)pid; (void)pgid; return 0; }
-pid_t tcgetpgrp(int fd) { (void)fd; return 1; }
-int tcsetpgrp(int fd, pid_t pgrp) { (void)fd; (void)pgrp; return 0; }
+pid_t tcgetpgrp(int fd) {
+    int pgrp;
+    if (check(iota_syscall3(IOTA_SYS_IOCTL, fd, TIOCGPGRP, (uint32_t)&pgrp)) < 0) return -1;
+    return pgrp;
+}
+
+int tcsetpgrp(int fd, pid_t pgrp) {
+    return check(iota_syscall3(IOTA_SYS_IOCTL, fd, TIOCSPGRP, (uint32_t)&pgrp));
+}
 
 unsigned int sleep(unsigned int seconds) {
     iota_sleep(seconds * 1000);
@@ -331,91 +405,109 @@ char *getlogin(void) {
 }
 
 long sysconf(int name) {
+    iota_sysinfo_t info;
     switch (name) {
+    case _SC_ARG_MAX: return 1024;
+    case _SC_CHILD_MAX: return 31;
     case _SC_CLK_TCK: return 100;
-    case _SC_PAGESIZE: return 4096;
+    case _SC_NGROUPS_MAX: return 1;
     case _SC_OPEN_MAX: return 32;
+    case _SC_PAGESIZE: return 4096;
+    case _SC_LINE_MAX: return 2048;
+    case _SC_NPROCESSORS_CONF:
+    case _SC_NPROCESSORS_ONLN: return 1;
+    case _SC_PHYS_PAGES:
+    case _SC_AVPHYS_PAGES:
+        iota_syscall3(IOTA_SYS_SYSINFO, (uint32_t)&info, 0, 0);
+        return name == _SC_PHYS_PAGES ? (long)info.total_pages : (long)info.free_pages;
+    case _SC_GETPW_R_SIZE_MAX:
+    case _SC_GETGR_R_SIZE_MAX: return 1024;
+    case _SC_LOGIN_NAME_MAX: return 32;
+    case _SC_HOST_NAME_MAX: return 64;
     }
     errno = EINVAL;
     return -1;
 }
 
-char *optarg = NULL;
-int optind = 1, opterr = 1, optopt = 0;
-
-int getopt(int argc, char * const argv[], const char *optstring) {
-    static int nextchar = 0;
-
-    if (optind >= argc || !argv[optind]) return -1;
-    char *arg = argv[optind];
-    if (nextchar == 0) {
-        if (arg[0] != '-' || arg[1] == '\0') return -1;
-        if (strcmp(arg, "--") == 0) {
-            optind++;
-            return -1;
-        }
-        nextchar = 1;
-    }
-
-    int c = arg[nextchar++];
-    const char *spec = strchr(optstring, c);
-    if (!spec || c == ':') {
-        optopt = c;
-        if (opterr && optstring[0] != ':') fprintf(stderr, "%s: invalid option -- '%c'\n", argv[0], c);
-        if (arg[nextchar] == '\0') { optind++; nextchar = 0; }
-        return '?';
-    }
-
-    if (spec[1] == ':') {
-        if (arg[nextchar] != '\0') {
-            optarg = arg + nextchar;
-        } else if (optind + 1 < argc) {
-            optarg = argv[++optind];
-        } else {
-            optopt = c;
-            optind++;
-            nextchar = 0;
-            if (opterr && optstring[0] != ':') fprintf(stderr, "%s: option requires an argument -- '%c'\n", argv[0], c);
-            return optstring[0] == ':' ? ':' : '?';
-        }
-        optind++;
-        nextchar = 0;
-    } else if (arg[nextchar] == '\0') {
-        optind++;
-        nextchar = 0;
-    }
-    return c;
+int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
+    return check(iota_syscall3(IOTA_SYS_POLL, (uint32_t)fds, nfds, timeout));
 }
 
-/*
- * The kernel has no readiness polling, and all fds block on read. A
- * zero-timeout poll therefore reports nothing pending; any real wait reports
- * the requested read/write fds as ready so the caller's blocking read() can
- * proceed. Timeouts are not honoured.
- */
-static int select_common(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, int poll_only) {
-    int ready = 0;
-    if (exceptfds) FD_ZERO(exceptfds);
-    if (poll_only) {
-        if (readfds) FD_ZERO(readfds);
-        if (writefds) FD_ZERO(writefds);
-        return 0;
-    }
+/* select() and pselect() are poll() with fd_set bookkeeping */
+static int select_poll(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, int timeout_ms) {
+    struct pollfd pfd[FD_SETSIZE];
+    int n = 0;
     for (int fd = 0; fd < nfds && fd < FD_SETSIZE; fd++) {
-        if (readfds && FD_ISSET(fd, readfds)) ready++;
-        if (writefds && FD_ISSET(fd, writefds)) ready++;
+        short ev = 0;
+        if (readfds && FD_ISSET(fd, readfds)) ev |= POLLIN;
+        if (writefds && FD_ISSET(fd, writefds)) ev |= POLLOUT;
+        if (exceptfds && FD_ISSET(fd, exceptfds)) ev |= POLLPRI;
+        if (!ev) continue;
+        pfd[n].fd = fd;
+        pfd[n].events = ev;
+        pfd[n].revents = 0;
+        n++;
     }
-    return ready;
+    int r = poll(pfd, n, timeout_ms);
+    if (r < 0) return -1;
+
+    if (readfds) FD_ZERO(readfds);
+    if (writefds) FD_ZERO(writefds);
+    if (exceptfds) FD_ZERO(exceptfds);
+    int count = 0;
+    for (int i = 0; i < n; i++) {
+        short re = pfd[i].revents;
+        if (re & POLLNVAL) {
+            errno = EBADF;
+            return -1;
+        }
+        if (readfds && (re & (POLLIN | POLLHUP | POLLERR)) && (pfd[i].events & POLLIN)) {
+            FD_SET(pfd[i].fd, readfds);
+            count++;
+        }
+        if (writefds && (re & (POLLOUT | POLLERR)) && (pfd[i].events & POLLOUT)) {
+            FD_SET(pfd[i].fd, writefds);
+            count++;
+        }
+        if (exceptfds && (re & POLLPRI)) {
+            FD_SET(pfd[i].fd, exceptfds);
+            count++;
+        }
+    }
+    return count;
 }
 
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout) {
-    int poll_only = timeout && timeout->tv_sec == 0 && timeout->tv_usec == 0;
-    return select_common(nfds, readfds, writefds, exceptfds, poll_only);
+    int ms = timeout ? (int)(timeout->tv_sec * 1000 + timeout->tv_usec / 1000) : -1;
+    return select_poll(nfds, readfds, writefds, exceptfds, ms);
 }
 
 int pselect(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
             const struct timespec *timeout, const sigset_t *sigmask) {
     (void)sigmask;
-    int poll_only = timeout && timeout->tv_sec == 0 && timeout->tv_nsec == 0;
-    return select_common(nfds, readfds, writefds, exceptfds, poll_only);
+    int ms = timeout ? (int)(timeout->tv_sec * 1000 + timeout->tv_nsec / 1000000) : -1;
+    return select_poll(nfds, readfds, writefds, exceptfds, ms);
+}
+
+/* Each user belongs to its primary group only (supplementary groups are not tracked) */
+__attribute__((weak)) int getgroups(int size, gid_t list[]) {
+    if (size == 0) return 1;
+    if (size < 1) {
+        errno = EINVAL;
+        return -1;
+    }
+    list[0] = getgid();
+    return 1;
+}
+
+__attribute__((weak)) int setgroups(size_t size, const gid_t *list) {
+    (void)size;
+    (void)list;
+    return 0;
+}
+
+__attribute__((weak)) int initgroups(const char *user, gid_t group) {
+    (void)user;
+    (void)group;
+    return 0;
 }

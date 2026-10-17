@@ -264,6 +264,38 @@ static int sys_open(const char* path, int flags, uint32_t mode) {
     return fd;
 }
 
+/* poll(): ebx = struct pollfd {int fd; short events; short revents}[], ecx = count,
+   edx = timeout in ms (-1 = forever). Returns how many entries are ready. */
+typedef struct {
+    int fd;
+    short events;
+    short revents;
+} kpollfd_t;
+
+static int sys_poll(kpollfd_t* fds, uint32_t n, int timeout_ms) {
+    fd_table_t* t = task_get_fds();
+    uint32_t deadline = timer_get_ticks() + (timeout_ms > 0 ? (uint32_t)(timeout_ms + 9) / 10 : 0);
+    for (;;) {
+        int ready = 0;
+        for (uint32_t i = 0; i < n; i++) {
+            fds[i].revents = 0;
+            if (fds[i].fd < 0) continue;
+            file_t* f = fd_get(t, fds[i].fd);
+            fds[i].revents = f ? (short)file_poll(f, fds[i].events) : POLLNVAL;
+            if (fds[i].revents) ready++;
+        }
+        if (ready || timeout_ms == 0) return ready;
+        if (timeout_ms > 0 && (int32_t)(timer_get_ticks() - deadline) >= 0) return 0;
+
+        /* Let other tasks run (pipe writers), then sleep until an interrupt
+           (a key press or the next timer tick) */
+        task_yield();
+        task_cpu_idle = 1;
+        __asm__ volatile("sti; hlt; cli" : : : "memory");
+        task_cpu_idle = 0;
+    }
+}
+
 static int sys_getdents(int fd, struct dirent* out, uint32_t size) {
     file_t* f = fd_get(task_get_fds(), fd);
     if (!f) return -EBADF;
@@ -345,9 +377,15 @@ void syscall_handler(registers_t *regs) {
     fd_table_t* fds = task_get_fds();
 
     switch (regs->eax) {
-        case SYS_PANIC:
-            panic((char*)regs->ebx);
-            break;
+        case SYS_PANIC: /* ebx = message, ecx = error code to show */
+        {
+            static char message[80];
+            const char* m = (const char*)regs->ebx;
+            int i = 0;
+            for (; m && m[i] && i < (int)sizeof(message) - 1; i++) message[i] = m[i];
+            message[i] = '\0';
+            bsod(i ? message : "Panic requested by a program", regs->ecx, regs);
+        }
 
         case SYS_REBOOT:
             reboot();
@@ -569,6 +607,64 @@ void syscall_handler(registers_t *regs) {
             }
             break;
         }
+
+        case SYS_FCHDIR: /* ebx = fd of an open directory */
+        {
+            file_t* f = fd_get(fds, (int)regs->ebx);
+            if (!f) { regs->eax = -EBADF; break; }
+            if (f->kind != FILE_NODE || VFS_TYPE(f->node) != FS_DIRECTORY) { regs->eax = -ENOTDIR; break; }
+            char path[VFS_PATH_MAX];
+            vfs_get_path(f->node, path);
+            task_set_cwd(path);
+            regs->eax = 0;
+            break;
+        }
+
+        case SYS_FCHOWN: /* ebx=fd, ecx=uid, edx=gid (-1 = unchanged) */
+        {
+            file_t* f = fd_get(fds, (int)regs->ebx);
+            if (!f) { regs->eax = -EBADF; break; }
+            if (f->kind != FILE_NODE) { regs->eax = -EINVAL; break; }
+            if (task_get_uid() != 0) { regs->eax = -EPERM; break; }
+            if (regs->ecx != 0xFFFFFFFF) f->node->uid = regs->ecx;
+            if (regs->edx != 0xFFFFFFFF) f->node->gid = regs->edx;
+            regs->eax = 0;
+            break;
+        }
+
+        case SYS_FCHMOD: /* ebx=fd, ecx=mode */
+        {
+            file_t* f = fd_get(fds, (int)regs->ebx);
+            if (!f) { regs->eax = -EBADF; break; }
+            if (f->kind != FILE_NODE) { regs->eax = -EINVAL; break; }
+            f->node->mode = regs->ecx & 07777;
+            regs->eax = 0;
+            break;
+        }
+
+        case SYS_FUTIME: /* ebx=fd, ecx=mtime (0 = now) */
+        {
+            file_t* f = fd_get(fds, (int)regs->ebx);
+            if (!f) { regs->eax = -EBADF; break; }
+            if (f->kind != FILE_NODE) { regs->eax = -EINVAL; break; }
+            f->node->mtime = regs->ecx ? regs->ecx : rtc_now();
+            regs->eax = 0;
+            break;
+        }
+
+        case SYS_FDPATH: /* ebx=fd of an open file or directory, ecx=buffer (VFS_PATH_MAX): its absolute path */
+        {
+            file_t* f = fd_get(fds, (int)regs->ebx);
+            if (!f) { regs->eax = -EBADF; break; }
+            if (f->kind != FILE_NODE) { regs->eax = -EINVAL; break; }
+            vfs_get_path(f->node, (char*)regs->ecx);
+            regs->eax = 0;
+            break;
+        }
+
+        case SYS_POLL:
+            regs->eax = sys_poll((kpollfd_t*)regs->ebx, regs->ecx, (int)regs->edx);
+            break;
 
         case SYS_GETCWD:
             strcpy((char*)regs->ebx, cwd());

@@ -23,7 +23,8 @@ jobs:
       - name: Install ISO & Bootloader Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y xorriso grub-pc-bin mtools zip
+          # zlib1g-dev: a native mandoc builds the man page index (mandoc.db)
+          sudo apt-get install -y xorriso grub-pc-bin mtools zip zlib1g-dev
 
       - name: Setup i686-elf GCC Cross-Compiler
         run: |
@@ -39,18 +40,23 @@ jobs:
           i686-elf-gcc --version
           i686-elf-ld --version
 
-      # src/gnu is not in git: keep the downloaded Bash source between runs
-      - name: Cache GNU Bash Source
+      # src/gnu is not in git: keep the downloaded source tarballs (Bash, GNU
+      # coreutils/sed/grep/awk/tar/..., less, ncurses, zlib, mandoc) between runs
+      - name: Cache Third-Party Sources
         uses: actions/cache@v4
         with:
-          path: src/gnu/bash-5.2.21.tar.gz
-          key: gnu-bash-5.2.21
+          path: |
+            src/gnu/*.tar.gz
+            src/gnu/*.tar.xz
+          key: third-party-${{ hashFiles('tools/build-ports.sh', 'Makefile') }}
 
       - name: Compile and Package IotaOS
         run: |
-          # Kernel, libc, /bin tools and Bash (downloaded, configured and
-          # cross-compiled on first use), then the root filesystem image and
-          # the bootable ISO. WITH_BASH=y answers the "compile Bash?" question.
+          # Kernel, libc, IotaOS's own tools, then every ported package
+          # (downloaded, configured and cross-compiled: Bash, GNU coreutils,
+          # findutils, sed, grep, gawk, diffutils, gzip, tar, less, mandoc),
+          # the root filesystem image and the bootable ISO.
+          # WITH_BASH=y answers the "compile Bash?" question.
           make clean
           make iso WITH_BASH=y
 

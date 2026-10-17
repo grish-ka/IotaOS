@@ -8,6 +8,7 @@
 #include "cpu/isr.h"
 #include "drivers/system.h"
 #include "drivers/tty.h"
+#include "drivers/diag.h"
 
 static inline unsigned char kbd_inb(unsigned short port) {
     unsigned char ret;
@@ -78,6 +79,13 @@ void keyboard_handle_interrupt(registers_t* regs) {
 
     int released = scancode & 0x80;
     unsigned char key = scancode & 0x7F;
+
+    /* Boot window: remember the key for the diagnostics prompt instead of typing it */
+    if (boot_key_phase) {
+        if (!released) boot_key = key;
+        extended = 0;
+        return;
+    }
 
     if (extended) {
         extended = 0;

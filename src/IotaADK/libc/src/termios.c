@@ -41,3 +41,51 @@ int tcflow(int fd, int action) {
     /* The console has no flow control */
     return 0;
 }
+
+/* The console has no line speed; report 38400 baud like a Linux virtual console */
+speed_t cfgetispeed(const struct termios *termios_p) {
+    (void)termios_p;
+    return B38400;
+}
+
+speed_t cfgetospeed(const struct termios *termios_p) {
+    (void)termios_p;
+    return B38400;
+}
+
+int cfsetispeed(struct termios *termios_p, speed_t speed) {
+    (void)termios_p;
+    (void)speed;
+    return 0;
+}
+
+int cfsetospeed(struct termios *termios_p, speed_t speed) {
+    (void)termios_p;
+    (void)speed;
+    return 0;
+}
+
+void cfmakeraw(struct termios *t) {
+    t->c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
+    t->c_oflag &= ~OPOST;
+    t->c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+    t->c_cflag &= ~(CSIZE | PARENB);
+    t->c_cflag |= CS8;
+    t->c_cc[VMIN] = 1;
+    t->c_cc[VTIME] = 0;
+}
+
+int tcdrain(int fd) {
+    (void)fd;
+    return 0;
+}
+
+int tcflush(int fd, int queue_selector) {
+    return ioctl(fd, 0x540B /* TCFLSH */, (void *)queue_selector) < 0 ? -1 : 0;
+}
+
+int tcsendbreak(int fd, int duration) {
+    (void)fd;
+    (void)duration;
+    return 0;
+}

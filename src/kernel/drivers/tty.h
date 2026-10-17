@@ -15,6 +15,10 @@
 #define ICANON 0x0002
 #define ECHO   0x0008
 
+/* c_oflag */
+#define OPOST  0x0001
+#define ONLCR  0x0004
+
 /* IOCTL commands (Linux numbering, as libc's <sys/ioctl.h>) */
 #define TCGETS     0x5401
 #define TCSETS     0x5402
@@ -38,5 +42,7 @@ struct termios {
 void tty_init(vfs_node_t* node);
 void tty_input_char(char c);
 void tty_input_seq(const char *seq);
+/* Non-zero if a read() from the console would not block */
+int tty_readable(void);
 
 #endif

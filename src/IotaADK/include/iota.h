@@ -55,6 +55,12 @@
 #define IOTA_SYS_GETIDS    49
 #define IOTA_SYS_SETIDS    50
 #define IOTA_SYS_CHOWN     51
+#define IOTA_SYS_FCHDIR    52
+#define IOTA_SYS_POLL      53
+#define IOTA_SYS_FCHOWN    54
+#define IOTA_SYS_FCHMOD    55
+#define IOTA_SYS_FUTIME    56
+#define IOTA_SYS_FDPATH    57
 
 /* Generic call: returns the kernel's result (negative errno on failure for
    the POSIX-style calls) */
@@ -102,6 +108,11 @@ typedef struct {
     uint32_t free_pages;
     uint32_t procs;
 } iota_sysinfo_t;
+
+/* Crash to the blue screen with your own message and error code (never returns) */
+static inline void iota_panic(const char* message, uint32_t code) {
+    __asm__ volatile ("int $0x80" : : "a"(0), "b"(message), "c"(code) : "memory");
+}
 
 static inline int iota_read(int fd, void* buf, uint32_t count) {
     int ret;

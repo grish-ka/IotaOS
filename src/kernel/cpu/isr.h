@@ -17,4 +17,7 @@ typedef struct {
     uint32_t eip, cs, eflags, useresp, ss;           /* Pushed automatically by the CPU */
 } registers_t;
 
+/* Show the blue screen (title, error code, registers) and reboot on F1 */
+void bsod(const char* title, uint32_t err_code, registers_t *regs) __attribute__((noreturn));
+
 #endif

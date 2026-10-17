@@ -8,7 +8,6 @@
 #define _SYS_TYPES_H
 
 #include <stddef.h>
-#include <stdint.h>
 
 /* 1. Fundamental Process, User & Group Types */
 #ifndef _PID_T_DEFINED
@@ -105,15 +104,39 @@ typedef unsigned int u_int;
 typedef unsigned long u_long;
 typedef char *caddr_t;
 
+/* Exact-width integers (also in <stdint.h>, which this header must not include) */
+typedef signed char int8_t;
+typedef short int16_t;
+typedef int int32_t;
+typedef long long int64_t;
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;
 
-typedef signed char u_int8_t;
+typedef unsigned char u_int8_t;
 typedef unsigned short u_int16_t;
 typedef unsigned int u_int32_t;
 typedef unsigned long long u_int64_t;
+
+
+/* More POSIX types */
+#ifndef _ID_T_DEFINED
+#define _ID_T_DEFINED
+typedef unsigned int id_t;
+#endif
+#ifndef _FSBLKCNT_T_DEFINED
+#define _FSBLKCNT_T_DEFINED
+typedef unsigned long fsblkcnt_t;
+#endif
+#ifndef _FSFILCNT_T_DEFINED
+#define _FSFILCNT_T_DEFINED
+typedef unsigned long fsfilcnt_t;
+#endif
+#ifndef _KEY_T_DEFINED
+#define _KEY_T_DEFINED
+typedef int key_t;
+#endif
 
 /* 7. File Descriptor Sets (for select / pselect) */
 #ifndef _FD_SET_DEFINED

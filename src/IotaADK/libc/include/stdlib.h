@@ -26,9 +26,23 @@ extern char **environ;
 int rand(void);
 void srand(unsigned int seed);
 char *mktemp(char *template);
+int mkstemp(char *template);
+const char *getprogname(void);
+
+/* Multibyte characters ("C" locale: one byte each) */
+#ifndef __WCHAR_TYPE__
+#define __WCHAR_TYPE__ int
+#endif
+int mbtowc(__WCHAR_TYPE__ *pwc, const char *s, size_t n);
+int wctomb(char *s, __WCHAR_TYPE__ wc);
+int mblen(const char *s, size_t n);
+size_t mbstowcs(__WCHAR_TYPE__ *dst, const char *src, size_t len);
+size_t wcstombs(char *dst, const __WCHAR_TYPE__ *src, size_t len);
 int atoi(const char *nptr);
 void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *));
 double strtod(const char *nptr, char **endptr);
+long double strtold(const char *nptr, char **endptr);
+float strtof(const char *nptr, char **endptr);
 long strtol(const char *nptr, char **endptr, int base);
 unsigned long strtoul(const char *nptr, char **endptr, int base);
 long long strtoll(const char *nptr, char **endptr, int base);

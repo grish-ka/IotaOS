@@ -23,6 +23,23 @@
 #define O_NONBLOCK  0x0800
 #define O_DIRECTORY 0x10000
 #define O_CLOEXEC   0x80000
+#define O_SYNC      0x101000
+#define O_DSYNC     0x1000
+#define O_RSYNC     O_SYNC
+#define O_DIRECT    0x4000
+#define O_LARGEFILE 0
+#define O_NOFOLLOW  0x20000
+#define O_NOATIME   0x40000
+#define O_PATH      0x200000
+#define O_TMPFILE   0x410000
+#define O_NDELAY    O_NONBLOCK
+
+/* *at() functions */
+#define AT_FDCWD            (-100)
+#define AT_SYMLINK_NOFOLLOW 0x100
+#define AT_REMOVEDIR        0x200
+#define AT_SYMLINK_FOLLOW   0x400
+#define AT_EACCESS          0x200
 #define O_ACCMODE   0x0003
 
 /* File descriptor flags */
@@ -37,5 +54,7 @@
 int open(const char *path, int oflag, ...);
 int fcntl(int fd, int cmd, ...);
 int creat(const char *path, mode_t mode);
+int openat(int dirfd, const char *path, int oflag, ...);
+int renameat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath);
 
 #endif

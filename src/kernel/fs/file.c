@@ -6,6 +6,7 @@
 
 #include "fs/file.h"
 #include "cpu/task.h"
+#include "drivers/tty.h"
 
 #define MAX_FILES  256
 #define MAX_PIPES  32
@@ -94,6 +95,24 @@ void file_put(file_t* f) {
         else p->writers--;
         if (p->readers <= 0 && p->writers <= 0) p->used = 0;
     }
+}
+
+int file_poll(file_t* f, int events) {
+    int ready = 0;
+    if (f->kind == FILE_PIPE_READ) {
+        if (f->pipe->count > 0) ready |= POLLIN;
+        if (f->pipe->writers <= 0) ready |= POLLHUP | POLLIN; /* end of file is readable */
+    } else if (f->kind == FILE_PIPE_WRITE) {
+        if (f->pipe->readers <= 0) ready |= POLLERR;
+        else if (f->pipe->count < PIPE_SIZE) ready |= POLLOUT;
+    } else if (f->node->read && VFS_TYPE(f->node) == FS_CHARDEVICE && f->node->ioctl) {
+        /* The console: input only when a read would not block */
+        if (tty_readable()) ready |= POLLIN;
+        ready |= POLLOUT;
+    } else {
+        ready |= POLLIN | POLLOUT; /* files and other devices never block */
+    }
+    return ready & (events | POLLHUP | POLLERR);
 }
 
 int32_t file_read(file_t* f, uint8_t* buf, uint32_t count) {

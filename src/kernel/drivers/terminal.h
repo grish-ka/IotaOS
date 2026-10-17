@@ -65,5 +65,9 @@ void terminal_write(const char* data, size_t size);
 void terminal_writestring(const char* data);
 /* Move the blinking hardware cursor to the current output position */
 void terminal_flush_cursor(void);
+/* Feed one byte to the terminal emulator with no newline translation */
+void terminal_emit(char c);
+/* Where answers to status queries (ESC [ 6 n etc.) are delivered */
+void terminal_set_responder(void (*send)(const char*));
 
 #endif /* TERMINAL_H */

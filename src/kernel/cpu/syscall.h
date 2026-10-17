@@ -61,6 +61,12 @@
 #define SYS_GETIDS      49
 #define SYS_SETIDS      50
 #define SYS_CHOWN       51
+#define SYS_FCHDIR      52
+#define SYS_POLL        53
+#define SYS_FCHOWN      54
+#define SYS_FCHMOD      55
+#define SYS_FUTIME      56
+#define SYS_FDPATH      57
 
 /* Sizes of the buffers handed to a starting program */
 #define ARGS_SIZE 1024

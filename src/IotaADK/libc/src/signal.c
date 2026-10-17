@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include "iota.h"
 
 /*
@@ -132,4 +133,33 @@ int sigsetmask(int mask) {
     int old = sig_blocked;
     sig_blocked = mask;
     return old;
+}
+
+int signalfd(int fd, const sigset_t *mask, int flags) {
+    (void)mask;
+    if (fd != -1) return fd; /* changing the mask of an existing one */
+    int p[2];
+    if (pipe(p) < 0) return -1;
+    /* The write end is kept open and never written: no signals ever arrive */
+    fcntl(p[1], F_SETFD, FD_CLOEXEC);
+    if (flags & 0x80000) fcntl(p[0], F_SETFD, FD_CLOEXEC);
+    if (flags & 0x0800) fcntl(p[0], F_SETFL, O_NONBLOCK);
+    return p[0];
+}
+
+/* No signal is ever delivered, so waiting for one could never finish:
+   report EINVAL (POSIX returns the error number directly) */
+int sigwait(const sigset_t *set, int *sig) {
+    (void)set;
+    (void)sig;
+    return EINVAL;
+}
+
+int sigpending(sigset_t *set) {
+    *set = 0;
+    return 0;
+}
+
+__attribute__((weak)) int killpg(pid_t pgrp, int sig) {
+    return kill(pgrp, sig);
 }
