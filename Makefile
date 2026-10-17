@@ -107,7 +107,7 @@ initrd: all bash-vfs ports $(BIN_DIR)/mandoc $(HOST_MAKEWHATIS)
 	@echo "Assembling root filesystem..."
 	rm -rf $(ROOT)
 	mkdir -p $(ROOT)/bin $(ROOT)/dev $(ROOT)/etc $(ROOT)/home $(ROOT)/mnt $(ROOT)/root \
-		$(ROOT)/tmp $(ROOT)/usr/bin $(ROOT)/usr/local/bin $(ROOT)/usr/share $(ROOT)/var/log $(ROOT)/var/mail
+		$(ROOT)/tmp $(ROOT)/usr/bin $(ROOT)/usr/local/bin $(ROOT)/usr/share $(ROOT)/usr/share/man $(ROOT)/var/log $(ROOT)/var/mail
 	cp -a $(ROOTFS_SRC)/. $(ROOT)/
 	cp $(BIN_DIR)/* $(ROOT)/bin/
 	@for link in $(BIN_LINKS); do \

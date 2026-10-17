@@ -1,0 +1,36 @@
+IotaOS manual pages
+===================
+
+The manual pages in /usr/share/man come from these upstream projects and keep
+their original licences (stated at the top of each page's source):
+
+  GNU coreutils 9.7 (as packaged by Ubuntu)  GPL-3.0-or-later
+      basename cat chmod chown cp cut date df dirname du echo env false head
+      id ls mkdir mv printenv pwd rm rmdir seq sleep sort stat tail tee touch
+      tr true uname uniq wc whoami yes
+  GNU Bash 5.2.21                             GPL-3.0-or-later
+      bash (sh)
+  GNU grep                                    GPL-3.0-or-later
+      grep (egrep, fgrep)
+  GNU findutils                               GPL-3.0-or-later
+      find xargs
+  GNU nano                                    GPL-3.0-or-later
+      nano
+  procps-ng                                   GPL-2.0-or-later / LGPL
+      free kill ps uptime
+  util-linux                                  GPL-2.0-or-later
+      more (less) su login
+  hostname, debianutils (which), ncurses (clear), sudo (ISC)
+  GNU sed, gawk, diffutils, gzip, tar, less (as packaged by Ubuntu / upstream)
+      sed gawk (awk) diff cmp diff3 sdiff gzip (gunzip zcat) tar less
+  mandoc 1.14.6                               ISC
+      man apropos (whatis) mandoc man.7 mdoc.7 makewhatis.8
+
+Pages for IotaOS's own programs (intro bsod iosh meminfo ramstress reboot
+spinner tests) were written for IotaOS (MIT).
+
+Most standard commands on IotaOS are the real GNU programs (coreutils 9.5,
+findutils 4.10.0, sed 4.9, grep 3.11, gawk 5.3.0, diffutils 3.10, gzip 1.13,
+tar 1.35, less 668), so these pages describe them exactly. Only free, hostname,
+kill, login, ps, su, sudo, uptime, which, nano and reboot are IotaOS's own,
+and support the common options rather than everything their pages list.
