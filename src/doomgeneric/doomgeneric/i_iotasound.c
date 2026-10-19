@@ -9,8 +9,8 @@
 // 315-byte slice; blocking writes to the 32 KiB kernel ring provide the
 // same pacing DMODMA got from its DMA buffer.
 //
-// Music (DG_music_module) stays silent: OPL/DMXWAV playback is a separate
-// milestone. Sound effects only.
+// Music (DG_music_module) plays DMX MUS scores as OPL3 FM through the
+// kernel's /dev/opl - see IotaMusic_* below.
 //
 
 #include <stdio.h>

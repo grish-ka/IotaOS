@@ -310,7 +310,10 @@ void I_InitMusic(void)
 {
     if(music_module != NULL)
     {
-        music_module->Init();
+        if (!music_module->Init())
+        {
+            printf("I_InitMusic: music init FAILED (/dev/opl missing?) - music will be silent\n");
+        }
     }
 }
 

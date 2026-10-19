@@ -407,6 +407,14 @@ void doomgeneric_Tick()
     // frame syncronous IO operations
     I_StartFrame ();
 
+    // Boom-style MN_StartAudio: when the main menu is up over the title
+    // or attract screens and nothing is playing, start the theme instead
+    // of greeting the player with silence.
+    if (menuactive && gamestate == GS_DEMOSCREEN && !S_MusicPlaying())
+    {
+        S_StartMusic(gamemode == commercial ? mus_dm2ttl : mus_intro);
+    }
+
     TryRunTics (); // will run at least one tic
 
     S_UpdateSounds (players[consoleplayer].mo);// move positional sounds
