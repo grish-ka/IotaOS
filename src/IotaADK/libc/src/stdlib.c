@@ -449,12 +449,19 @@ __attribute__((weak)) long strtol(const char *nptr, char **endptr, int base) {
 }
 
 __attribute__((weak)) unsigned long strtoul(const char *nptr, char **endptr, int base) {
-    unsigned long long v = strtoull(nptr, endptr, base);
-    if (v > ULONG_MAX && v < (0ULL - (unsigned long long)ULONG_MAX)) {
+    int neg, overflow;
+    unsigned long long v = parse_unsigned(nptr, endptr, base, &neg, &overflow);
+    /* Match glibc (UNSIGNED branch of strtol_l): ERANGE whenever the parsed
+     * magnitude exceeds ULONG_MAX, regardless of sign; the negative wrap
+     * below then only applies to in-range values ("-1" stays ERANGE-free).
+     * The old test (v > ULONG_MAX && v < 0 - ULONG_MAX) never fired for
+     * v in [0xFFFFFFFF00000001, ULLONG_MAX] on the 32-bit target, so values
+     * 18446744073709551614 silently truncated with errno left stale. */
+    if (overflow || v > ULONG_MAX) {
         errno = ERANGE;
         return ULONG_MAX;
     }
-    return (unsigned long)v;
+    return neg ? (unsigned long)(0ULL - v) : (unsigned long)v;
 }
 
 __attribute__((weak)) double strtod(const char *nptr, char **endptr) {
