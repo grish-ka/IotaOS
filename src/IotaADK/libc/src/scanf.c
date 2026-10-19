@@ -145,20 +145,44 @@ static int vscan(source_t *in, const char *fmt, va_list ap_in) {
             matched_any = 1;
         } else if (strchr("feEgGaA", conv)) {
             char buf[64];
+            int hexf = (conv == 'a' || conv == 'A');
+            int dot = 0, expo = 0;
             int n = 0;
+            /* Collect the longest token that could form a number: one dot,
+               one e (p for %a) exponent, sign only leading or after it. */
             while (width > 0 && n < (int)sizeof(buf) - 1) {
                 int c = peek(in);
-                int ok = isdigit(c) || c == '.' ||
-                         ((c == '-' || c == '+') && (n == 0 || buf[n - 1] == 'e' || buf[n - 1] == 'E')) ||
-                         ((c == 'e' || c == 'E') && n > 0);
+                int ok;
+                if (hexf ? isxdigit(c) : isdigit(c)) ok = 1;
+                else if (hexf && (c == 'x' || c == 'X') && n >= 1 && n <= 2 && buf[n - 1] == '0')
+                    ok = 1; /* the 0x / +0x / -0x prefix of a hex float */
+                else if (c == '.') ok = !dot && !expo;
+                else if (c == '-' || c == '+')
+                    ok = n == 0 || (!hexf && (buf[n - 1] == 'e' || buf[n - 1] == 'E')) ||
+                         (hexf && n > 0 && (buf[n - 1] == 'p' || buf[n - 1] == 'P'));
+                else if (hexf ? (c == 'p' || c == 'P') : (c == 'e' || c == 'E')) ok = !expo;
+                else ok = 0;
                 if (!ok) break;
+                if (c == '.') dot = 1;
+                else if (!hexf && (c == 'e' || c == 'E')) expo = 1;
+                else if (hexf && (c == 'p' || c == 'P')) expo = 1;
                 buf[n++] = (char)c;
                 advance(in);
                 width--;
             }
             buf[n] = '\0';
             if (n == 0) break;
-            double d = strtod(buf, NULL);
+            /* Whatever strtod did not consume goes back to the input, so
+               "1ex" scans 1 and leaves 'e', and "1.2.3" cannot eat ".3". */
+            char *endp;
+            double d = strtod(buf, &endp);
+            int k = (int)(endp - buf);
+            if (k < n) {
+                in->count -= n - k;
+                if (in->str) in->str -= n - k;
+                else for (int i = n - 1; i >= k; i--) ungetc((unsigned char)buf[i], in->file);
+            }
+            if (k == 0) break; /* token held no number: matching failure */
             if (!skip) {
                 if (len == 'l' || len == 'q') *va_arg(ap, double *) = d;
                 else *va_arg(ap, float *) = (float)d;

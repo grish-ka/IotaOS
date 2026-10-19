@@ -482,6 +482,54 @@ __attribute__((weak)) double strtod(const char *nptr, char **endptr) {
     int neg = 0, any = 0;
     while (*s == ' ' || (*s >= '\t' && *s <= '\r')) s++;
     if (*s == '-' || *s == '+') neg = (*s++ == '-');
+    /* C99 hex floats: 0x1.8p+3, exponent optional, case-insensitive */
+    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+        const char *h = s + 2;
+        double hv = 0, frac = 1;
+        int hany = 0;
+        for (;; h++) {
+            int d = (*h >= '0' && *h <= '9') ? *h - '0'
+                  : (*h >= 'a' && *h <= 'f') ? *h - 'a' + 10
+                  : (*h >= 'A' && *h <= 'F') ? *h - 'A' + 10 : -1;
+            if (d < 0) break;
+            hv = hv * 16 + d;
+            hany = 1;
+        }
+        if (*h == '.') {
+            for (h++; ; h++) {
+                int d = (*h >= '0' && *h <= '9') ? *h - '0'
+                      : (*h >= 'a' && *h <= 'f') ? *h - 'a' + 10
+                      : (*h >= 'A' && *h <= 'F') ? *h - 'A' + 10 : -1;
+                if (d < 0) break;
+                frac /= 16;
+                hv += d * frac;
+                hany = 1;
+            }
+        }
+        if (hany) {
+            if (*h == 'p' || *h == 'P') {
+                const char *e = h + 1;
+                int eneg = 0;
+                long ev = 0;
+                if (*e == '-' || *e == '+') eneg = (*e++ == '-');
+                if (*e >= '0' && *e <= '9') {
+                    /* 2^1200 overflows a double; saturate like the 10^ path */
+                    for (; *e >= '0' && *e <= '9'; e++)
+                        if (ev < 2000) ev = ev * 10 + (*e - '0');
+                    h = e;
+                    if (hv != 0) {
+                        if (ev > 1200) ev = 1200;
+                        if (eneg) { for (long k = 0; k < ev; k++) hv /= 2; }
+                        else      { for (long k = 0; k < ev; k++) hv *= 2; }
+                        if (hv == HUGE_VAL || hv == -HUGE_VAL || hv == 0) errno = ERANGE;
+                    }
+                }
+            }
+            if (endptr) *endptr = (char *)h;
+            return neg ? -hv : hv;
+        }
+        /* "0x" with no digits: parse the leading 0 as decimal instead */
+    }
     /* inf / infinity / nan, case-insensitive, like glibc */
     {
         int n = ci_prefix(s, "inf");

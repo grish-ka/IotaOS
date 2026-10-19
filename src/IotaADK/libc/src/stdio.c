@@ -28,14 +28,15 @@ static int mode_flags(const char *mode);
 struct _FILE {
     int fd;
     int flags;
-    int ungot;  /* pushed-back char from ungetc, or EOF */
+    int ungot[8]; /* pushed-back chars from ungetc (POSIX UNGET=8) */
+    int nungot;   /* how many are stacked */
     int pid;    /* child process of a popen() stream, else 0 */
 };
 
 static FILE std_streams[3] = {
-    { 0, F_STATIC, EOF, 0 },
-    { 1, F_STATIC, EOF, 0 },
-    { 2, F_STATIC, EOF, 0 },
+    { 0, F_STATIC, { 0 }, 0, 0 },
+    { 1, F_STATIC, { 0 }, 0, 0 },
+    { 2, F_STATIC, { 0 }, 0, 0 },
 };
 
 FILE *stdin = &std_streams[0];
@@ -396,7 +397,7 @@ FILE *fdopen(int fd, const char *mode) {
     if (!f) return NULL;
     f->fd = fd;
     f->flags = 0;
-    f->ungot = EOF;
+    f->nungot = 0;
     f->pid = 0;
     return f;
 }
@@ -422,7 +423,7 @@ static int mode_flags(const char *mode) {
 /* Reopen stream on path, keeping its descriptor number (so freopen on stdin
    still reads fd 0). With path NULL only the mode would change: accepted. */
 FILE *freopen(const char *path, const char *mode, FILE *stream) {
-    stream->ungot = EOF;
+    stream->nungot = 0;
     stream->flags &= F_STATIC;
     if (!path) return stream;
     int fd = open(path, mode_flags(mode), 0666);
@@ -454,9 +455,9 @@ int fileno(FILE *stream) {
 /* Output is unbuffered. For input, give back a pushed-back byte so the file
    position matches what the program has consumed (POSIX fflush on input) */
 int fflush(FILE *stream) {
-    if (stream && stream->ungot != EOF) {
-        lseek(stream->fd, -1, SEEK_CUR);
-        stream->ungot = EOF;
+    if (stream && stream->nungot > 0) {
+        lseek(stream->fd, -stream->nungot, SEEK_CUR);
+        stream->nungot = 0;
     }
     return 0;
 }
@@ -483,10 +484,9 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream) {
     size_t got = 0;
     unsigned char *p = ptr;
     if (bytes == 0) return 0;
-    if (stream->ungot != EOF) {
-        *p++ = (unsigned char)stream->ungot;
-        stream->ungot = EOF;
-        got = 1;
+    while (stream->nungot > 0 && got < bytes) {
+        *p++ = (unsigned char)stream->ungot[--stream->nungot];
+        got++;
     }
     while (got < bytes) {
         ssize_t r = read(stream->fd, p, bytes - got);
@@ -501,9 +501,8 @@ size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream) {
 int fgetc(FILE *stream) {
     unsigned char c;
     stream->flags = (stream->flags & ~F_WRITING) | F_READING;
-    if (stream->ungot != EOF) {
-        c = (unsigned char)stream->ungot;
-        stream->ungot = EOF;
+    if (stream->nungot > 0) {
+        c = (unsigned char)stream->ungot[--stream->nungot];
         return c;
     }
     ssize_t r = read(stream->fd, &c, 1);
@@ -518,8 +517,8 @@ int getc(FILE *stream) { return fgetc(stream); }
 int getchar(void) { return fgetc(stdin); }
 
 int ungetc(int c, FILE *stream) {
-    if (c == EOF || stream->ungot != EOF) return EOF;
-    stream->ungot = (unsigned char)c;
+    if (c == EOF || stream->nungot >= (int)(sizeof(stream->ungot) / sizeof(stream->ungot[0]))) return EOF;
+    stream->ungot[stream->nungot++] = (unsigned char)c;
     stream->flags &= ~F_EOF;
     return (unsigned char)c;
 }
@@ -612,14 +611,14 @@ void setlinebuf(FILE *stream) {
 }
 
 int fseek(FILE *stream, long offset, int whence) {
-    stream->ungot = EOF;
+    stream->nungot = 0;
     stream->flags &= ~F_EOF;
     return lseek(stream->fd, offset, whence) < 0 ? -1 : 0;
 }
 
 long ftell(FILE *stream) {
     long pos = lseek(stream->fd, 0, SEEK_CUR);
-    if (pos >= 0 && stream->ungot != EOF) pos--;
+    if (pos >= 0) pos -= stream->nungot;
     return pos;
 }
 
@@ -752,19 +751,18 @@ int __fwritable(FILE *stream) { (void)stream; return 1; }
 int __freading(FILE *stream) { return (stream->flags & F_READING) != 0; }
 int __fwriting(FILE *stream) { return (stream->flags & F_WRITING) != 0; }
 int __fsetlocking(FILE *stream, int type) { (void)stream; (void)type; return FSETLOCKING_INTERNAL; }
-void __fpurge(FILE *stream) { stream->ungot = EOF; }
+void __fpurge(FILE *stream) { stream->nungot = 0; }
 void __fseterr(FILE *stream) { stream->flags |= F_ERR; }
 void _flushlbf(void) {}
-size_t __freadahead(FILE *stream) { return stream->ungot != EOF ? 1 : 0; }
+size_t __freadahead(FILE *stream) { return (size_t)stream->nungot; }
 
 const char *__freadptr(FILE *stream, size_t *sizep) {
-    static char byte;
-    if (stream->ungot == EOF) return NULL;
-    byte = (char)stream->ungot;
-    *sizep = 1;
-    return &byte;
+    if (stream->nungot == 0) return NULL;
+    *sizep = (size_t)stream->nungot;
+    return (const char *)&stream->ungot[stream->nungot - 1];
 }
 
 void __freadptrinc(FILE *stream, size_t increment) {
-    if (increment) stream->ungot = EOF;
+    if (increment > (size_t)stream->nungot) increment = (size_t)stream->nungot;
+    stream->nungot -= (int)increment;
 }
