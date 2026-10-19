@@ -101,6 +101,7 @@ static void fmt_integer(sink_t *s, uintmax_t v, int neg, int base, int upper,
     const char *digits = upper ? "0123456789ABCDEF" : "0123456789abcdef";
     char tmp[64];
     int n = 0;
+    int nonzero = (v != 0); /* C17 7.21.6.1: the '#' prefix appears only for nonzero values */
     char prefix[4] = "";
 
     if (prec >= 0) flags &= ~FL_ZERO;
@@ -115,7 +116,7 @@ static void fmt_integer(sink_t *s, uintmax_t v, int neg, int base, int upper,
         if (neg) strcpy(prefix, "-");
         else if (flags & FL_PLUS) strcpy(prefix, "+");
         else if (flags & FL_SPACE) strcpy(prefix, " ");
-    } else if ((flags & FL_ALT) && base == 16 && n > 0) {
+    } else if ((flags & FL_ALT) && base == 16 && nonzero) {
         strcpy(prefix, upper ? "0X" : "0x");
     } else if (conv == 'p') {
         strcpy(prefix, "0x");
