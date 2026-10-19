@@ -22,6 +22,9 @@ def get_markdown_lang(filename):
     if filename.endswith(".cfg"): return "text"
     if filename.endswith((".c", ".h")): return "c"
     if filename.endswith(".s"): return "assembly"
+    if filename.endswith(".py"): return "python"
+    if filename.endswith(".sh"): return "bash"
+    if filename.endswith((".yml", ".yaml")): return "yaml"
     return "text"
 
 def main():
@@ -35,7 +38,7 @@ def main():
             for root, dirs, files in os.walk(directory):
                 dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
                 for file in files:
-                    if file.endswith(('.c', '.h', '.s', '.ld')):
+                    if file.endswith(('.c', '.h', '.s', '.ld', '.py', '.sh', '.yml', '.yaml')):
                         all_files.append(os.path.join(root, file))
         else:
             print(f"Warning: Directory '{directory}' not found.")

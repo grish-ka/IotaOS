@@ -9,3 +9,6 @@ build
 src/gnu
 os_dump.txt
 mandoc.db
+
+# gone-fishing harness artifacts
+.omp/
