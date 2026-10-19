@@ -170,13 +170,23 @@ static int getopt_internal(int argc, char *const argv[], const char *optstring,
                 optopt = 0;
                 return '?';
             }
-            if (long_only) {
+            if (long_only && (argv[optind][2] || !strchr(optstring, argv[optind][1]))) {
                 /* "-name" is tried as a long option unless it is a known short one alone */
                 int save = optind;
-                if (argv[optind][2] || !strchr(optstring, argv[optind][1])) {
-                    int r = parse_long(argc, argv, optstring, longopts, longindex, 1);
-                    if (r != -2) return r;
+                int r = parse_long(argc, argv, optstring, longopts, longindex, 1);
+                if (r != -2) return r;
+                /* Long lookup failed. Like glibc: retry as a short-option
+                 * group only when the first char is a known short option
+                 * ("-ax" -> 'a', then the usual '?x'); otherwise the whole
+                 * argument is ONE unrecognized option: '?' with optopt = 0,
+                 * consumed (-2 leaves optind already advanced past it by
+                 * parse_long), never a chain of bogus short options. */
+                if (strchr(optstring, argv[save][1])) {
                     optind = save;
+                } else {
+                    if (opterr && !colon) fprintf(stderr, "%s: unrecognized option '%s'\n", argv[0], argv[save]);
+                    optopt = 0;
+                    return '?';
                 }
             }
         }
@@ -198,24 +208,14 @@ static int getopt_internal(int argc, char *const argv[], const char *optstring,
     }
     if (spec[1] == ':') {
         if (spec[2] == ':') {                 /* optional argument: only attached */
-            if (long_only && (argv[optind][2] || !strchr(optstring, argv[optind][1]))) {
-                /* "-name" is tried as a long option unless it is a known short one alone */
-                int r = parse_long(argc, argv, optstring, longopts, longindex, 1);
-                if (r != -2) return r;
-                /* Long lookup failed. Like glibc: fall back to short-option
-                 * parsing only when the first char is a known short option
-                 * ("-ax" -> 'a' then '?x'); otherwise the whole argument is
-                 * one unrecognized option ('?' with optopt = 0, consumed),
-                 * not a chain of bogus short opts. */
-                if (strchr(optstring, argv[optind][1])) {
-                    /* retry as short options */
-                } else {
-                    if (opterr && !colon) fprintf(stderr, "%s: unrecognized option '%s'\n", argv[0], argv[optind]);
-                    optind++;
-                    optopt = 0;
-                    return '?';
-                }
+            if (nextchar) {
+                optarg = arg + nextchar;
+                optind++;
+                nextchar = 0;
+            } else {
+                optarg = NULL;
             }
+        } else if (nextchar) {
             optarg = arg + nextchar;
             optind++;
             nextchar = 0;

@@ -14,3 +14,6 @@ mandoc.db
 .omp/
 *.bak
 .omp_round*/
+
+# vendored doomgeneric keeps its upstream clone history out of the tree
+src/doomgeneric/.git-vendored-bak/

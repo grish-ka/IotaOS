@@ -167,10 +167,10 @@ $(BUILD_DIR)/hda.img:
 QEMU_AUDIO = -device sb16,audiodev=snd0 -audiodev sdl,id=snd0
 
 run: iso $(BUILD_DIR)/hda.img
-	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -hda $(BUILD_DIR)/hda.img $(QEMU_AUDIO)
+	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -hda $(BUILD_DIR)/hda.img -monitor telnet:127.0.0.1:4455,server,nowait $(QEMU_AUDIO)
 
 run-cursor: iso $(BUILD_DIR)/hda.img
-	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -hda $(BUILD_DIR)/hda.img -show-cursor $(QEMU_AUDIO)
+	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -hda $(BUILD_DIR)/hda.img -show-cursor -monitor telnet:127.0.0.1:4455,server,nowait $(QEMU_AUDIO)
 
 debug: iso $(BUILD_DIR)/hda.img
 	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -hda $(BUILD_DIR)/hda.img -serial stdio $(QEMU_AUDIO)
