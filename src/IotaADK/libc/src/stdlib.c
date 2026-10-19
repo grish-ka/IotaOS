@@ -191,22 +191,10 @@ void libc_entry(void) {
 }
 
 int atoi(const char *nptr) {
-    int res = 0;
-    int sign = 1;
-
-    while (*nptr == ' ' || *nptr == '\t' || *nptr == '\n' || *nptr == '\r') nptr++;
-
-    if (*nptr == '-' || *nptr == '+') {
-        if (*nptr == '-') sign = -1;
-        nptr++;
-    }
-
-    while (*nptr >= '0' && *nptr <= '9') {
-        res = res * 10 + (*nptr - '0');
-        nptr++;
-    }
-
-    return res * sign;
+    /* Same as glibc: (int)strtol(nptr, NULL, 10). The old hand-rolled parser
+     * skipped only " \t\n\r" and rejected the valid leading whitespace
+     * '\v' and '\f'. */
+    return (int)strtol(nptr, NULL, 10);
 }
 
 intmax_t strtoimax(const char *nptr, char **endptr, int base) {
