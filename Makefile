@@ -57,9 +57,9 @@ ROOTFS_SRC = rootfs
 ROOT = $(BUILD_DIR)/initrd_root
 INITRD = $(BUILD_DIR)/iso/boot/initrd.img
 # Extra names for programs, as NAME:TARGET hard links in /bin
-BIN_LINKS = man:mandoc apropos:mandoc whatis:mandoc makewhatis:mandoc poweroff:reboot halt:reboot shutdown:reboot awk:gawk gunzip:gzip zcat:gzip sh:bash
+BIN_LINKS = man:mandoc apropos:mandoc whatis:mandoc makewhatis:mandoc poweroff:reboot halt:reboot shutdown:reboot awk:gawk gunzip:gzip zcat:gzip sh:bash doomgeneric:doom raycaster:doomclassic
 
-all: $(BUILD_DIR)/IotaOS $(BUILD_DIR)/libc.a $(APP_BINARIES)
+all: $(BUILD_DIR)/IotaOS $(BUILD_DIR)/libc.a $(BIN_DIR)/doom $(APP_BINARIES)
 
 gnu-all: gnu-bash
 
@@ -89,6 +89,32 @@ $(BUILD_DIR)/crt0.o: $(ADK_DIR)/lib/crt0.s
 
 APP_CFLAGS = $(CFLAGS) -I$(ADK_DIR)/include -I$(LIBC_DIR)/include -fno-asynchronous-unwind-tables
 APP_LINK = $(LD) -m elf_i386 -T $(ADK_DIR)/lib/linker.ld $(BUILD_DIR)/crt0.o $(BUILD_DIR)/$*.o -L$(BUILD_DIR) -lc $(shell $(CC) -print-libgcc-file-name)
+
+# --- DOOMGENERIC AUTHENTIC ID SOFTWARE DOOM ENGINE ---
+DOOM_DIR = src/doomgeneric/doomgeneric
+DOOM_SRCS = dummy.c am_map.c doomdef.c doomstat.c dstrings.c d_event.c d_items.c \
+	d_iwad.c d_loop.c d_main.c d_mode.c d_net.c f_finale.c f_wipe.c \
+	g_game.c hu_lib.c hu_stuff.c info.c i_cdmus.c i_endoom.c i_joystick.c \
+	i_scale.c i_sound.c i_system.c i_timer.c memio.c m_argv.c m_bbox.c \
+	m_cheat.c m_config.c m_controls.c m_fixed.c m_menu.c m_misc.c m_random.c \
+	p_ceilng.c p_doors.c p_enemy.c p_floor.c p_inter.c p_lights.c p_map.c \
+	p_maputl.c p_mobj.c p_plats.c p_pspr.c p_saveg.c p_setup.c p_sight.c \
+	p_spec.c p_switch.c p_telept.c p_tick.c p_user.c r_bsp.c r_data.c \
+	r_draw.c r_main.c r_plane.c r_segs.c r_sky.c r_things.c sha1.c \
+	sounds.c statdump.c st_lib.c st_stuff.c s_sound.c tables.c v_video.c \
+	wi_stuff.c w_checksum.c w_file.c w_main.c w_wad.c z_zone.c w_file_stdc.c \
+	i_input.c i_video.c doomgeneric.c doomgeneric_iota.c i_iotasound.c
+DOOM_OBJS = $(patsubst %.c, $(BUILD_DIR)/doomgeneric/%.o, $(DOOM_SRCS))
+
+$(BUILD_DIR)/doomgeneric/%.o: $(DOOM_DIR)/%.c
+	@mkdir -p $(BUILD_DIR)/doomgeneric
+	$(CC) -c $< -o $@ $(APP_CFLAGS) -I$(DOOM_DIR) -DNORMALUNIX -DLINUX -D_DEFAULT_SOURCE -DFEATURE_SOUND -Wno-unused-parameter -Wno-unused-variable
+
+$(BIN_DIR)/doom: $(DOOM_OBJS) $(BUILD_DIR)/crt0.o $(ADK_DIR)/lib/linker.ld $(BUILD_DIR)/libc.a
+	@mkdir -p $(BIN_DIR)
+	@echo "Linking authentic id Software DOOM engine: $@"
+	$(LD) -m elf_i386 -T $(ADK_DIR)/lib/linker.ld $(BUILD_DIR)/crt0.o $(DOOM_OBJS) -L$(BUILD_DIR) -lc $(shell $(CC) -print-libgcc-file-name) -o $@
+	$(STRIP) $@
 
 $(BIN_DIR)/%: $(APPS_DIR)/%.c $(BUILD_DIR)/crt0.o $(ADK_DIR)/lib/linker.ld $(BUILD_DIR)/libc.a
 	@mkdir -p $(BIN_DIR)
@@ -130,16 +156,29 @@ iso: $(BUILD_DIR)/IotaOS initrd
 	cp grub.cfg $(BUILD_DIR)/iso/boot/grub/grub.cfg
 	grub-mkrescue -o $(BUILD_DIR)/IotaOS.iso $(BUILD_DIR)/iso
 
-run: iso
-	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso
+$(BUILD_DIR)/hda.img:
+	@mkdir -p $(BUILD_DIR)
+	@if [ ! -f $@ ]; then qemu-img create -f raw $@ 64M; fi
 
-debug: iso
-	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -serial stdio
+
+# Sound Blaster 16 (ISA: IRQ5, DMA1/5 on the pc machine). Disable with
+# `make run QEMU_AUDIO=`; if this QEMU build lacks -audiodev sdl, use
+# alsa/pa, or `none` for a silent device.
+QEMU_AUDIO = -device sb16,audiodev=snd0 -audiodev sdl,id=snd0
+
+run: iso $(BUILD_DIR)/hda.img
+	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -hda $(BUILD_DIR)/hda.img $(QEMU_AUDIO)
+
+run-cursor: iso $(BUILD_DIR)/hda.img
+	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -hda $(BUILD_DIR)/hda.img -show-cursor $(QEMU_AUDIO)
+
+debug: iso $(BUILD_DIR)/hda.img
+	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -hda $(BUILD_DIR)/hda.img -serial stdio $(QEMU_AUDIO)
 
 # Start frozen, with the QEMU monitor on this terminal: type `c` to run,
 # `stop` to pause again, `info registers` / `x/16x ADDR` to inspect, `quit` to exit
 pause: iso
-	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -S -monitor stdio
+	qemu-system-i386 -m 4096M -cdrom $(BUILD_DIR)/IotaOS.iso -S -monitor stdio $(QEMU_AUDIO)
 
 sync:
 	@chmod +x tools/sync_tasks.sh
@@ -221,27 +260,31 @@ BASH_VFS = $(BIN_DIR)/bash
 
 bash-vfs: $(BUILD_DIR)/libc.a $(BUILD_DIR)/crt0.o
 	@if [ ! -f $(BASH_BIN) ]; then \
-		answer="$(WITH_BASH)"; \
+		answer="$(WITH_GNU)"; \
+		if [ -z "$$answer" ]; then answer="$(WITH_BASH)"; fi; \
 		if [ -z "$$answer" ] && [ -t 0 ]; then \
-			printf "GNU Bash is not compiled. Compile it now and copy it to the VFS? [y/N] "; \
-			read answer; \
+			echo ""; \
+			echo "GNU Bash is not compiled. Do you want to compile GNU?"; \
+			echo "  1) Yes"; \
+			echo "  2) Exit"; \
+			printf "Enter choice [1/2]: "; \
+			read choice; \
+			case "$$choice" in \
+				1|[yY]|[yY][eE][sS]) answer="y" ;; \
+				*) echo "Build aborted by user."; exit 1 ;; \
+			esac; \
 		fi; \
 		case "$$answer" in \
-			[yY]|[yY][eE][sS]) \
+			[yY]|[yY][eE][sS]|1) \
 				if [ -f $(BASH_SRC)/config.h ]; then \
 					$(MAKE) -C $(BASH_SRC) || exit 1; \
 				else \
 					$(MAKE) gnu-bash || exit 1; \
 				fi ;; \
 			*) \
-				echo "Skipping Bash; the VFS will not contain /bin/bash."; \
-				rm -f $(BASH_VFS); \
-				exit 0 ;; \
+				echo "Build aborted by user."; \
+				exit 1 ;; \
 		esac; \
-	elif [ $(BUILD_DIR)/libc.a -nt $(BASH_BIN) ]; then \
-		echo "libc changed: relinking Bash..."; \
-		rm -f $(BASH_BIN); \
-		$(MAKE) -C $(BASH_SRC) || exit 1; \
 	fi; \
 	mkdir -p $(BIN_DIR); \
 	if [ ! -f $(BASH_VFS) ] || [ $(BASH_BIN) -nt $(BASH_VFS) ]; then \
@@ -252,14 +295,37 @@ bash-vfs: $(BUILD_DIR)/libc.a $(BUILD_DIR)/crt0.o
 # --- OFFICIAL GNU / UTILITY PORTS ---
 # less, more, sed, grep, awk, diff, gzip, tar, coreutils and findutils are the
 # real packages, cross-compiled by tools/build-ports.sh into build/bin.
-# The stamp is renewed (programs relinked) whenever libc or the tooling changes.
-$(BIN_DIR)/.ports: $(BUILD_DIR)/libc.a $(BUILD_DIR)/crt0.o tools/build-ports.sh tools/build-port.sh \
-		tools/iota-cc tools/iota-config.site
-	@mkdir -p $(BIN_DIR)
-	PATH="$(PATH)" tools/build-ports.sh
-	touch $@
+ports:
+	@if [ ! -f $(BIN_DIR)/.ports ]; then \
+		answer="$(WITH_GNU)"; \
+		if [ -z "$$answer" ]; then answer="$(WITH_PORTS)"; fi; \
+		if [ -z "$$answer" ] && [ -t 0 ]; then \
+			echo ""; \
+			echo "GNU ports are not compiled. Do you want to compile GNU?"; \
+			echo "  1) Yes"; \
+			echo "  2) Exit"; \
+			printf "Enter choice [1/2]: "; \
+			read choice; \
+			case "$$choice" in \
+				1|[yY]|[yY][eE][sS]) answer="y" ;; \
+				*) echo "Build aborted by user."; exit 1 ;; \
+			esac; \
+		fi; \
+		case "$$answer" in \
+			[yY]|[yY][eE][sS]|1) \
+				mkdir -p $(BIN_DIR); \
+				PATH="$(PATH)" tools/build-ports.sh || exit 1; \
+				touch $(BIN_DIR)/.ports ;; \
+			*) \
+				echo "Build aborted by user."; \
+				exit 1 ;; \
+		esac; \
+	fi
 
-ports: $(BIN_DIR)/.ports
+clean-ports:
+	rm -f $(BIN_DIR)/.ports
+
+ports-rebuild: clean-ports ports
 
 # --- MANUAL PAGES: zlib + mandoc ---
 # mandoc provides man/apropos/whatis and reads the gzipped pages in
@@ -291,7 +357,7 @@ $(MANDOC_SRC)/configure: $(MANDOC_TAR)
 	tar -xzf $< -C $(GNU_DIR)
 	touch $@
 
-$(BIN_DIR)/mandoc: $(MANDOC_SRC)/configure tools/mandoc.configure.local $(BUILD_DIR)/libz.a $(BUILD_DIR)/libc.a $(BUILD_DIR)/crt0.o
+$(BIN_DIR)/mandoc: $(MANDOC_SRC)/configure tools/mandoc.configure.local $(BUILD_DIR)/libz.a
 	@mkdir -p $(BIN_DIR)
 	sed 's|@ROOT@|$(abspath .)|g' tools/mandoc.configure.local > $(MANDOC_SRC)/configure.local
 	cd $(MANDOC_SRC) && ./configure > configure.out 2>&1 && rm -f mandoc && $(MAKE) mandoc
@@ -306,4 +372,4 @@ $(HOST_MAKEWHATIS): $(MANDOC_SRC)/configure
 	cd $(HOST_MANDOC_DIR) && CC=gcc ./configure > configure.out 2>&1 && $(MAKE) mandoc
 	ln -sf mandoc $@
 
-.PHONY: pause ports all gnu-all gnu-bash clean clean-gnu run debug sync bash-vfs initrd iso
+.PHONY: pause ports all gnu-all gnu-bash clean clean-gnu run debug sync bash-vfs initrd iso clean-ports ports-rebuild

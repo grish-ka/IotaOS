@@ -11,25 +11,59 @@ Licensed under the MIT License.
 [![Version](https://img.shields.io/badge/Version-v1.0.1-brightgreen.svg)](https://github.com/grish-ka/IotaOS/releases)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/grish-ka/IotaOS/release.yml?branch=main&label=Build%20%26%20Release)](https://github.com/grish-ka/IotaOS/actions)
 
-[![IotaOS Components](https://go-pkg.vercel.app/api?project=IotaOS&data=kernel%3A1.0.1-u%2Cbash%3A5.2.21-u%2Ccoreutils%3A9.5-u%2Cmandoc%3A1.14.6-u%2Cncurses%3A6.5-u)](https://github.com/grish-ka/IotaOS)
+[![IotaOS Components](https://go-pkg.vercel.app/api?project=IotaOS&data=kernel%3A1.0.1-u%2Cbash%3A5.2.21-n%2Ccoreutils%3A9.5-n%2Cmandoc%3A1.14.6-u%2Cncurses%3A6.5-n)](https://github.com/grish-ka/IotaOS)
 
-**IotaOS** is a 32-bit x86 multitasking Unix-like operating system designed for simplicity, modularity, and practical experimentation. Featuring a custom monolithic kernel with a POSIX-compatible system call layer, IotaOS boots directly into an interactive **GNU Bash** shell with a ported suite of standard GNU utilities, a standard C library (**IotaADK libc**), an in-memory Virtual File System, ANSI terminal emulation, and an interactive boot-time diagnostics system.
+**IotaOS** is a 32-bit x86 multitasking Unix-like operating system designed for simplicity, modularity, and high-performance direct-framebuffer computing. Featuring a custom monolithic kernel with a POSIX-compatible system call layer, IotaOS boots seamlessly through the **LightDM Graphical Display Manager** into an authentic, lightweight **XFCE 4 Desktop Environment** (running at 90+ FPS in software CPU emulation), an interactive **GNU Bash** shell, **DOOM 3D Direct**, **Wayland-Gears 3D**, or retro emulation, backed by persistent ATA storage and a rich GNU toolchain.
+
+---
+
+## 📊 System Feature Matrix
+
+| Subsystem / Component | Implementation Status | Technical Details & Architecture | Launch Command / Interface |
+| :--- | :---: | :--- | :--- |
+| **LightDM Display Manager** | **Supported** | Graphical login manager on `/dev/fb0`, user switcher (`root`/`iota`), session picker, clock, power controls (reboot/shutdown) | `/bin/lightdm` (boot default) |
+| **XFCE 4 Desktop Environment** | **Supported** | Dual-tier XFCE panels (Top panel + Floating dock), Whisker Menu, Workspaces 1 & 2, Thunar file manager, XFCE Terminal, XFWM4 window roll-up `[^]` | `/bin/xfce` |
+| **High Refresh Rate Engine (90+ FPS)** | **Supported** | 60Hz, 75Hz, 120Hz, 144Hz & Uncapped modes; integer LUT geometry + dirty-rect presentation rendering at 90–120 FPS in QEMU | `/bin/xfce` / KSysGuard |
+| **Wayland-Gears 3D Demo** | **Supported** | 3 interlocking gears (20T, 14T, 10T), directional 3D shading, 4 palettes, optimized integer LUT rasterizer (50–90 FPS) | `/bin/gears` (or XFCE window) |
+| **DOOM 3D Raycasting Engine** | **Supported** | DDA texture raycaster, animated shotgun (muzzle flash & recoil), Doomguy status bar with glances, minimap, frags HUD | `/bin/doom` (or XFCE window) |
+| **Retro CHIP-8 Emulator 2.0** | **Supported** | Full CHIP-8 virtual machine (600Hz), phosphor green CRT display, keyboard paddle input, built-in Pong & Maze ROMs | `/bin/emu` (or XFCE window) |
+| **Persistent ATA / IDE HDD** | **Supported** | Primary ATA PIO block driver (`/dev/hda`), 512-byte sectors, cache flush; persists changes across reboots via `hda.img` | `/dev/hda` / `make run` |
+| **Mouse & VM Calibration** | **Supported** | CPUID hypervisor detection (QEMU/KVM/VBox/VMware), 85% VM smoothing, 4 distinct cursors (Greybird, Target, Amber, Halo) | `/dev/mouse` / Settings |
+| **Automated Test Suite (11/11)** | **Supported** | 11 automated test suites verifying Heap, VFS, Args, Env, ANSI, ATA HDD, Framebuffer, Mouse, Math, 32-bit PMM memory, and SB16 Audio (`/dev/dsp` + `/dev/mixer`) | `/bin/tests` |
+| **GNU Bash Shell** | **Supported** | GNU Bash 5.2.21 with full job control, piping, history, environment variables, scripting | `/bin/bash` / `/bin/sh` |
+| **GNU Coreutils & Tools** | **Supported** | Coreutils 9.5 (60+ tools), Grep 3.11, Sed 4.9, Gawk 5.3.0, Diffutils 3.10, Findutils 4.10.0, Mandoc 1.14.6 | `/bin/*` |
+| **Linear Framebuffer Graphics** | **Supported** | VBE 1024×768 32bpp linear framebuffer (`/dev/fb0`), double-buffering, dirty-rect cursor blitting | `/dev/fb0` |
+| **Physical Memory Manager** | **Supported** | BIOS/UEFI E820 memory mapping, 4 KB page frame allocator, supports up to 4 GB active physical RAM | `meminfo` |
+| **POSIX System Calls** | **Supported** | 40+ system calls via `int 0x80`: `fork()`, `execve()`, `waitpid()`, `mmap()`, `brk()`, `ioctl()`, `poll()`, file I/O | `libc.a` / `iota.h` |
+| **Sound / PC Speaker** | **Supported** | Sound Blaster 16 DMA PCM (OSS-style `/dev/dsp` + `/dev/mixer`, QEMU `-device sb16`) and PIT channel-2 speaker beeper | `/dev/dsp` / `/bin/beep` / `/bin/play` |
 
 ---
 
 ## 🌟 Key Features
 
-### 🖥️ Kernel & Architecture
-- **32-Bit Protected Mode:** Booted cleanly via GRUB and the Multiboot specification.
-- **Preemptive Multitasking:** Round-robin task scheduler driven by a 100 Hz Programmable Interval Timer (PIT).
-- **Virtual Memory & Paging:** Two-level x86 paging with isolated per-process virtual address spaces, user/kernel memory protection, and dynamic process heap (`brk` / `mmap`).
-- **POSIX Process Model:** Full implementation of `fork()`, `execve()`, `waitpid()`, `exit()`, process IDs (`PID`/`PPID`), session leadership, signals, and command-line arguments (`argc`/`argv`) and environment variables (`environ`).
-- **Rich Syscall Interface:** 40+ system calls dispatched via `int 0x80`, providing standard file I/O, directory traversal, piping, process control, and terminal manipulation.
-- **Virtual File System (VFS):** In-memory writable filesystem populated at boot from a `ustar` initrd ramdisk, supporting permissions, sticky bits (`/tmp` 1777), `/dev` character devices, and user directories (`/home`, `/root`).
-- **Device & TTY Subsystem:** Line-discipline terminal subsystem (`/dev/tty1`, `/dev/console`), `/dev/null`, `/dev/zero`, and CMOS Real-Time Clock (`/dev/rtc`).
-- **ANSI / VT100 Terminal Emulation:** 80×25 VGA text driver supporting 16 colors, cursor positioning, and standard ANSI escape sequences.
+### 🖥️ Desktop, Graphics & Gaming
+- **LightDM Graphical Display Manager (`/bin/lightdm`):** Elegant, modern login screen and session manager. Provides quick user account selection (`root` and `iota`), session switching, password authentication, and power management (Reboot, Shut Down, Console).
+- **XFCE 4 Desktop Environment (`/bin/xfce`):** Authentic, lightweight desktop experience featuring dual-panel architecture (Top Panel with Whisker menu, workspace switcher, task buttons, and live system tray; Bottom floating dock with app launchers), signature XFWM4 window shade/roll-up (`[^]`), Thunar file manager, and XFCE Terminal.
+- **Ultra-Fast 90+ FPS Rendering Pipeline:** Precomputed integer trigonometric and square-root lookup tables (LUTs) combined with dirty-rectangle window and cursor blitting eliminate floating-point bottlenecks, achieving a steady 90–120 FPS in QEMU software CPU emulation.
+- **High Refresh Rate Pacing (60Hz – 144Hz & Uncapped):** Dynamic frame pacing with instant toggle hotkey (<kbd>F11</kbd>) and real-time FPS benchmarking displayed directly in the system tray.
+- **Wayland-Gears 3D Benchmark (`/bin/gears`):** Real-time 3D rotating gears demo featuring mathematical tooth meshing, directional surface shading, speed controls, and multiple themes. Runs standalone or inside an XFCE desktop window.
+- **DOOM 3D Engine (`/bin/doom`):** Raycasted 3D first-person game engine featuring procedural textured stone and metal walls, classic Doomguy health/armor status bar, animated double-barrel shotgun, hitscan combat, and minimap.
+- **Retro CHIP-8 Emulator 2.0 (`/bin/emu`):** Built-in retro virtual machine executing classic video games at 600 Hz on a phosphor green CRT monitor.
+- **Hypervisor Mouse Calibration:** Differentiates the host machine's cursor from the virtual guest cursor with 4 high-visibility styles (Breeze VM Glow with `[VM]` badge, Precision Target Ring, Neon Amber, and Ghost Halo). Calibrates sensitivity (85% smoothed for virtual machines).
+
+### 💾 Storage & Persistent Disks
+- **ATA / IDE Hard Disk Controller (`/dev/hda`):** Direct PIO sector read and write support on Primary ATA bus (`0x1F0`–`0x1F7`) with hardware cache flush. Any file or raw data written to `/dev/hda` persists inside the QEMU hard disk image (`build/hda.img`) across system reboots.
+- **In-Memory VFS & Initrd:** Writable filesystem mounted from a standard `ustar` ramdisk with permission checks, sticky bits (`/tmp` 1777), `/dev` device nodes, and home directories.
+
+### 🧪 Diagnostics & Automated Verification
+- **Automated Test Suite (`/bin/tests`):** Comprehensive 11-step verification suite testing Dynamic Heap, VFS I/O, Command Arguments, Environment, ANSI, ATA Disk persistence, Framebuffer geometry, Mouse driver, x87 FPU Math, PMM memory limits, and SB16 audio (`/dev/dsp` formats, mixer, poll).
 - **Boot Diagnostics Console:** Pause during boot by pressing <kbd>DEL</kbd>, <kbd>ESC</kbd>, or <kbd>F2</kbd> to inspect CPUID features, memory maps, RTC time, and PIC interrupt masks.
 - **Kernel Crash Screen:** Diagnostic Blue Screen of Death (BSOD) displaying CPU registers, stack dumps, and exception details on fatal panics.
+
+### 🔊 Audio & Sound
+- **Sound Blaster 16 PCM Audio (`/dev/dsp`, `/dev/audio`):** OSS-compatible playback (`SNDCTL_DSP_*` ioctls, 8-bit unsigned / 16-bit signed, mono/stereo, 5–45 kHz) driven by ISA DMA (ch1/ch5) and IRQ5 with a 32 KiB auto-init ring on QEMU's `-device sb16`. `/bin/play 440 2` renders a sine tone straight to the card.
+- **FM Music (`/dev/opl`):** register pipe to the card's OPL3 chip (0x388/0x389). `doom` plays the classic DMX-MUS scoretracks (title `D_VICTOR`, per-level `D_E1M1` …) through it with a 9-voice allocator — authentic FM music, synthesized by the emulated chip itself.
+- **Mixer & PC Speaker (`/dev/mixer`, `KIOCSOUND`):** Software master/PCM volume (`MIXER_READ`/`MIXER_WRITE`) with SB16 mixer registers programmed for real hardware; PIT channel-2 beeper reachable from any tty — `/bin/beep -f 880 -l 300` works even without a sound card. The terminal bell (`\a`) sounds 200 ms of tone and auto-mutes via the timer tick.
 
 ### 📦 Ported GNU Userspace
 IotaOS ports real, unmodified upstream GNU and Unix utilities:
@@ -253,8 +287,8 @@ IotaOS/
 With the **v1.0** milestone reached, IotaOS has successfully transitioned from an initial prototype to a multitasking operating system with a rich GNU userspace. Upcoming development goals include:
 
 ### 💾 Storage & Filesystems (v1.1)
-- [ ] IDE/ATA and AHCI disk controller drivers for physical hard drive access.
-- [ ] Read/write filesystem implementation (ext2 or FAT32) to replace ramdisk-only storage.
+- [x] IDE/ATA Primary PIO disk controller driver (`/dev/hda`) with 512-byte persistent sector I/O.
+- [ ] Read/write filesystem implementation (ext2 or FAT32) on `/dev/hda`.
 - [ ] Partition table parsing (MBR / GPT).
 - [ ] Standalone installer image (`IotaOSInstaller.iso`) for permanent disk installations.
 
@@ -263,6 +297,16 @@ With the **v1.0** milestone reached, IotaOS has successfully transitioned from a
 - [ ] Kernel network packet buffer architecture (`sk_buff` style).
 - [ ] Basic TCP/IP network stack (ARP, IPv4, ICMP ping, UDP, TCP).
 - [ ] Socket syscalls (`sys_socket`, `sys_connect`, `sys_bind`, `sys_listen`, `sys_accept`).
+
+### 🔊 Audio (v1.3)
+- [x] Sound Blaster 16 DSP driver (probe, 0x41 raw-Hz rate, auto-init DMA output) on QEMU `-device sb16`.
+- [x] ISA 8237 DMA channels 1 (8-bit) and 5 (16-bit) with 64 KiB-boundary-safe 32 KiB ring.
+- [x] OSS-style `/dev/dsp` + `/dev/audio` playback device (`SNDCTL_DSP_*` ioctls, `poll`, blocking writes, SYNC drain).
+- [x] `/dev/mixer` with `MIXER_READ`/`MIXER_WRITE` master/PCM volume (software gain + SB16 mixer registers).
+- [x] PC speaker via `KIOCSOUND` on ttys, `/bin/beep` and `/bin/play` demo tools, audio entry in `/bin/tests` (11/11).
+- [ ] Capture (`/dev/dsp` read path, mixer record levels).
+- [x] Doom SFX + classic FM music: `i_iotasound.c` sound module (DMX lump cache, 8-channel u8 mixer into `/dev/dsp`) and DMX-MUS -> OPL player over `/dev/opl`.
+- [x] OPL3 FM music via the `/dev/opl` register pipe (chip-side synthesis; `/dev/sequencer` not needed).
 
 ### ⚙️ Kernel Enhancements & Future Architecture
 - [ ] Dynamic linking and shared object (`.so`) loader.

@@ -12,3 +12,5 @@ mandoc.db
 
 # gone-fishing harness artifacts
 .omp/
+*.bak
+.omp_round*/

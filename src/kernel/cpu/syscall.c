@@ -523,6 +523,10 @@ void syscall_handler(registers_t *regs) {
             } else {
                 uint32_t old_break = task_get_heap_end();
                 uint32_t new_break = old_break + increment;
+                if (new_break < TASK_HEAP_BASE || new_break >= 0xC0000000) {
+                    regs->eax = (uint32_t)-1;
+                    break;
+                }
 
                 uint32_t start_page = (old_break + 0xFFF) & ~0xFFF;
                 uint32_t end_page = (new_break + 0xFFF) & ~0xFFF;

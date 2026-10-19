@@ -387,6 +387,11 @@ double tan(double x) {
 }
 float sinf(float x) { return sin(x); }
 float cosf(float x) { return cos(x); }
+float tanf(float x) { return tan(x); }
+float atan2f(float y, float x) { return atan2(y, x); }
+float atanf(float x) { return atan(x); }
+float asinf(float x) { return asin(x); }
+float acosf(float x) { return acos(x); }
 
 static ld atan2_l(ld y, ld x) {
     __asm__("fpatan" : "=t"(y) : "0"(x), "u"(y) : "st(1)");

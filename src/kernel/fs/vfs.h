@@ -36,11 +36,16 @@
 #define VFS_PATH_MAX 256
 
 struct vfs_node;
+struct file;
 
 /* Device hooks; regular files and directories are handled by the VFS itself */
 typedef uint32_t (*read_type_t)(struct vfs_node*, uint32_t, uint32_t, uint8_t*);
 typedef uint32_t (*write_type_t)(struct vfs_node*, uint32_t, uint32_t, uint8_t*);
 typedef int (*ioctl_type_t)(struct vfs_node*, uint32_t, void*);
+
+/* Optional char-device hooks: poll() readiness, and last-close */
+typedef uint32_t (*poll_type_t)(struct vfs_node*, uint32_t events);
+typedef void (*close_type_t)(struct vfs_node*, struct file*);
 
 /*
  * Every file, directory and device lives in one in-memory tree. File data
@@ -69,6 +74,8 @@ typedef struct vfs_node {
     read_type_t read;       /* devices only */
     write_type_t write;
     ioctl_type_t ioctl;
+    poll_type_t poll;       /* optional: poll() readiness mask */
+    close_type_t close;     /* optional: last reference to the node is going away */
 } vfs_node_t;
 
 /* Directory entry as returned to programs by SYS_GETDENTS */

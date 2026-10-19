@@ -12,7 +12,7 @@
 /* What the kernel knows about how it booted, shown on the diagnostics screen */
 typedef struct {
     uint32_t total_memory;      /* bytes the kernel uses */
-    uint32_t detected_memory;   /* bytes the bootloader reported */
+    uint64_t detected_memory;   /* bytes the bootloader reported */
     uint32_t initrd_address;
     uint32_t initrd_size;
     uint32_t fs_entries;

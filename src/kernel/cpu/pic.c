@@ -17,11 +17,10 @@
 
 /* Remaps the PICs so IRQs 0-15 fire on IDT entries 32-47 */
 void pic_remap(void) {
-    uint8_t a1, a2;
-
     /* Save current masks */
-    a1 = inb(PIC1_DATA);
-    a2 = inb(PIC2_DATA);
+    uint8_t a1 = inb(PIC1_DATA);
+    uint8_t a2 = inb(PIC2_DATA);
+    (void)a1; (void)a2;
 
     /* Start the initialization sequence (in cascade mode) */
     outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
@@ -41,9 +40,19 @@ void pic_remap(void) {
     outb(PIC1_DATA, ICW4_8086);
     outb(PIC2_DATA, ICW4_8086);
 
-    /* --- CHANGE THIS BOTTOM PART --- */
-    /* Mask all interrupts except IRQ 0 (Timer) and IRQ 1 (Keyboard) */
-    /* 0xFC in binary is 1111 1100. This unmasks bit 0 and bit 1! */
-    outb(PIC1_DATA, 0xFC); 
-    outb(PIC2_DATA, 0xFF); 
+    /* Mask all interrupts except IRQ 0 (Timer), IRQ 1 (Keyboard), and IRQ 2 (Cascade) */
+    outb(PIC1_DATA, 0xF8); 
+    /* Mask all slave interrupts except IRQ 12 (PS/2 Mouse, bit 4) */
+    outb(PIC2_DATA, 0xEF); 
+}
+
+/* Enable (masked=0) or disable (masked!=0) a single IRQ line without
+   touching the other lines on the same PIC. */
+void pic_irq_mask(uint8_t irq, int masked) {
+    uint16_t data_port = (irq < 8) ? PIC1_DATA : PIC2_DATA;
+    uint8_t bit = (uint8_t)(1 << (irq & 7));
+    uint8_t mask = inb(data_port);
+    if (masked) mask |= bit;
+    else        mask &= (uint8_t)~bit;
+    outb(data_port, mask);
 }

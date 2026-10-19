@@ -89,6 +89,9 @@ void file_put(file_t* f) {
     if (!f || f->refs <= 0) return;
     if (--f->refs > 0) return;
 
+    /* Devices get a last-close hook (e.g. /dev/dsp stops playback) */
+    if (f->kind == FILE_NODE && f->node && f->node->close) f->node->close(f->node, f);
+
     pipe_t* p = f->pipe;
     if (p) {
         if (f->kind == FILE_PIPE_READ) p->readers--;
@@ -99,6 +102,10 @@ void file_put(file_t* f) {
 
 int file_poll(file_t* f, int events) {
     int ready = 0;
+
+    /* A poll op on the node takes precedence over the generic rules */
+    if (f->kind == FILE_NODE && f->node && f->node->poll)
+        return (int)f->node->poll(f->node, (uint32_t)events) & events;
     if (f->kind == FILE_PIPE_READ) {
         if (f->pipe->count > 0) ready |= POLLIN;
         if (f->pipe->writers <= 0) ready |= POLLHUP | POLLIN; /* end of file is readable */
@@ -162,6 +169,41 @@ int32_t file_write(file_t* f, const uint8_t* buf, uint32_t count) {
         return n;
     }
 
+
+    /* Pollable char devices (e.g. /dev/dsp) short-write when their queue is
+       full; block here until the device takes more, like the pipe path. */
+    if (f->kind == FILE_NODE && f->node && f->node->poll) {
+        uint32_t total = 0;
+        while (total < count) {
+            if (!(f->node->poll(f->node, POLLOUT) & POLLOUT)) {
+                if (f->flags & O_NONBLOCK) return total ? (int32_t)total : -EAGAIN;
+                __asm__ volatile("sti");
+                task_cpu_idle = 1;
+                __asm__ volatile("hlt" : : : "memory");
+                task_cpu_idle = 0;
+                __asm__ volatile("cli");
+                continue;
+            }
+            int32_t n = vfs_write(f->node, f->offset, count - total, (uint8_t*)buf + total);
+            if (n < 0) return total ? (int32_t)total : n;
+            if (n == 0) {
+                if (total) break;
+                if (f->flags & O_NONBLOCK) return -EAGAIN;
+                /* A poll-ready write that took nothing must still sleep:
+                   a bare continue here busy-spins with IF clear (the poll
+                   and the writer can disagree transiently, e.g. one odd
+                   byte free in S16 mode), freezing every IRQ source. */
+                __asm__ volatile("sti");
+                task_cpu_idle = 1;
+                __asm__ volatile("hlt" : : : "memory");
+                task_cpu_idle = 0;
+                __asm__ volatile("cli");
+                continue;
+            }
+            total += (uint32_t)n;
+        }
+        return (int32_t)total;
+    }
     if ((f->flags & O_APPEND) && VFS_TYPE(f->node) == FS_FILE) f->offset = f->node->size;
     int32_t n = vfs_write(f->node, f->offset, count, (uint8_t*)buf);
     if (n > 0 && VFS_TYPE(f->node) == FS_FILE) f->offset += n;

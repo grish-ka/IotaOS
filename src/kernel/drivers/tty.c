@@ -4,6 +4,7 @@
  * Licensed under the MIT License.
  */
 
+#include "drivers/audio.h"
 #include "tty.h"
 #include "terminal.h"
 #include "cpu/task.h"
@@ -191,6 +192,13 @@ static int tty_ioctl(vfs_node_t *node, uint32_t request, void *arg) {
     case FIONREAD:
         *(int*)arg = (tty_head - tty_tail + TTY_BUF_SIZE) % TTY_BUF_SIZE;
         return 0;
+    case 0x4BC0: /* KIOCSOUND: PC speaker, arg = PIT period (1193180/Hz); 0 stops.
+                     Duration is controlled by the caller, as on Linux. */ {
+        uint32_t period = (uint32_t)(uintptr_t)arg;
+        if (period) speaker_beep(1193180u / period);
+        else        speaker_off();
+        return 0;
+    }
     }
     return -25; /* ENOTTY */
 }

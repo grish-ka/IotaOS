@@ -117,18 +117,18 @@ static void show_cpu(void) {
 
 /* ---- the rest ---- */
 
-static void mb(char *out, uint32_t bytes) {
-    sprintf(out, "%d MB", bytes / (1024 * 1024));
+static void mb(char *out, uint64_t bytes) {
+    sprintf(out, "%u MB", (uint32_t)(bytes / (1024 * 1024)));
 }
 
 static void show_memory(const diag_boot_info_t *info) {
     char used_by_kernel[24], detected[24];
     mb(detected, info->detected_memory);
-    mb(used_by_kernel, info->total_memory);
+    mb(used_by_kernel, (uint64_t)info->total_memory);
     uint32_t total = pmm_get_total_block_count(), free_blocks = pmm_get_free_block_count();
     printf("\033[1;33mMemory\033[0m\n");
     printf("  bootloader reported %s, kernel uses %s%s\n", detected, used_by_kernel,
-           info->total_memory < info->detected_memory ? " (1 GB limit)" : "");
+           (uint64_t)info->total_memory < info->detected_memory ? " (2 GB active 32-bit limit)" : "");
     printf("  %d pages of 4 KB: %d free, %d in use\n", total, free_blocks, total - free_blocks);
     printf("  ramdisk at 0x%x, %d KB, %d entries\n", info->initrd_address, info->initrd_size / 1024, info->fs_entries);
 }

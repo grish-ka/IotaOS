@@ -1,11 +1,8 @@
 /*
- * IotaOS - terminal.c
- * Copyright (c) 2026 grish-ka
- * Licensed under the MIT License.
- *
- * VGA text console with a Linux-console-compatible escape sequence parser,
- * so the "linux" terminfo/termcap entries describe it correctly.
- */
+* IotaOS - terminal.c
+* Copyright (c) 2026 grish-ka
+* Licensed under the MIT License.
+*/
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -13,6 +10,8 @@
 #include "terminal.h"
 #include "drivers/string.h"
 #include "drivers/io.h"
+#include "drivers/audio.h"
+#include "drivers/fb.h"
 
 #define DEFAULT_FG VGA_COLOR_LIGHT_GREY
 #define DEFAULT_BG VGA_COLOR_BLACK
@@ -20,6 +19,8 @@
 size_t terminal_row;
 size_t terminal_column;
 uint8_t terminal_color;
+static uint16_t fb_terminal_buffer[VGA_WIDTH * VGA_HEIGHT];
+static uint16_t fb_rendered_buffer[VGA_WIDTH * VGA_HEIGHT];
 uint16_t* terminal_buffer = (uint16_t*)VGA_MEMORY;
 
 /* --- ESCAPE SEQUENCE STATE MACHINE --- */
@@ -108,8 +109,29 @@ static void update_color(void) {
 }
 
 static void clear_cells(size_t from, size_t to) {
-    for (size_t i = from; i < to && i < VGA_WIDTH * VGA_HEIGHT; i++) {
-        terminal_buffer[i] = vga_entry(' ', terminal_color);
+    if (from >= to) return;
+    if (to > VGA_WIDTH * VGA_HEIGHT) to = VGA_WIDTH * VGA_HEIGHT;
+
+    uint16_t entry = vga_entry(' ', terminal_color);
+
+    if (fb_info.enabled && from == 0 && to >= VGA_WIDTH * VGA_HEIGHT) {
+        fb_clear(fb_vga_to_rgb((terminal_color >> 4) & 0x0F));
+        for (size_t i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
+            terminal_buffer[i] = entry;
+            fb_rendered_buffer[i] = entry;
+        }
+        return;
+    }
+
+    for (size_t i = from; i < to; i++) {
+        terminal_buffer[i] = entry;
+        if (fb_info.enabled && fb_rendered_buffer[i] != entry) {
+            fb_rendered_buffer[i] = entry;
+            size_t x = i % VGA_WIDTH;
+            size_t y = i / VGA_WIDTH;
+            fb_draw_char(x * 8, y * 16, ' ', fb_vga_to_rgb(terminal_color & 0x0F),
+                         fb_vga_to_rgb((terminal_color >> 4) & 0x0F));
+        }
     }
 }
 
@@ -120,6 +142,12 @@ void terminal_clear(void)
     terminal_column = 0;
     if (terminal_color == 0) update_color();
     clear_cells(0, VGA_WIDTH * VGA_HEIGHT);
+    if (fb_info.enabled) {
+        fb_clear(fb_vga_to_rgb((terminal_color >> 4) & 0x0F));
+        for (size_t i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
+            fb_rendered_buffer[i] = vga_entry(' ', terminal_color);
+        }
+    }
     terminal_flush_cursor();
 }
 
@@ -139,6 +167,14 @@ static void reset_state(void) {
 
 void terminal_initialize(void)
 {
+    if (fb_info.enabled) {
+        terminal_buffer = fb_terminal_buffer;
+    } else {
+        terminal_buffer = (uint16_t*)VGA_MEMORY;
+    }
+    for (size_t i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
+        fb_rendered_buffer[i] = 0xFFFF;
+    }
     reset_state();
     terminal_clear();
 }
@@ -151,15 +187,42 @@ void terminal_setcolor(uint8_t color)
 void terminal_putentryat(char c, uint8_t color, size_t x, size_t y)
 {
     const size_t index = y * VGA_WIDTH + x;
-    terminal_buffer[index] = vga_entry(c, color);
+    uint16_t entry = vga_entry(c, color);
+    terminal_buffer[index] = entry;
+    if (fb_info.enabled) {
+        if (fb_rendered_buffer[index] != entry) {
+            fb_rendered_buffer[index] = entry;
+            uint8_t fg_idx = color & 0x0F;
+            uint8_t bg_idx = (color >> 4) & 0x0F;
+            fb_draw_char(x * 8, y * 16, c, fb_vga_to_rgb(fg_idx), fb_vga_to_rgb(bg_idx));
+        }
+    }
 }
 
 void terminal_flush_cursor(void) {
-    uint16_t pos = terminal_row * VGA_WIDTH + terminal_column;
-    outb(0x3D4, 0x0F);
-    outb(0x3D5, (uint8_t)(pos & 0xFF));
-    outb(0x3D4, 0x0E);
-    outb(0x3D5, (uint8_t)((pos >> 8) & 0xFF));
+    if (!fb_info.enabled) {
+        uint16_t pos = terminal_row * VGA_WIDTH + terminal_column;
+        outb(0x3D4, 0x0F);
+        outb(0x3D5, (uint8_t)(pos & 0xFF));
+        outb(0x3D4, 0x0E);
+        outb(0x3D5, (uint8_t)((pos >> 8) & 0xFF));
+    } else {
+        static size_t last_cur_x = 0, last_cur_y = 0;
+        if (last_cur_y < VGA_HEIGHT && last_cur_x < VGA_WIDTH) {
+            uint16_t entry = terminal_buffer[last_cur_y * VGA_WIDTH + last_cur_x];
+            char c = (char)(entry & 0xFF);
+            uint8_t color = (uint8_t)(entry >> 8);
+            fb_draw_char(last_cur_x * 8, last_cur_y * 16, c,
+                         fb_vga_to_rgb(color & 0x0F), fb_vga_to_rgb((color >> 4) & 0x0F));
+            fb_rendered_buffer[last_cur_y * VGA_WIDTH + last_cur_x] = entry;
+        }
+        last_cur_x = terminal_column;
+        last_cur_y = terminal_row;
+        if (terminal_row < VGA_HEIGHT && terminal_column < VGA_WIDTH) {
+            fb_fill_rect(terminal_column * 8, terminal_row * 16 + 14, 8, 2, 0x00FFFFFF);
+            fb_rendered_buffer[terminal_row * VGA_WIDTH + terminal_column] = 0xFFFF;
+        }
+    }
 }
 
 /* Move rows [top, bottom] up by n lines, blanking the bottom ones */
@@ -171,6 +234,22 @@ static void scroll_up(size_t top, size_t bottom, size_t n) {
         }
     }
     clear_cells((bottom + 1 - n) * VGA_WIDTH, (bottom + 1) * VGA_WIDTH);
+    if (fb_info.enabled) {
+        for (size_t r = top; r <= bottom; r++) {
+            size_t row_idx = r * VGA_WIDTH;
+            for (size_t x = 0; x < VGA_WIDTH; x++) {
+                size_t idx = row_idx + x;
+                uint16_t entry = terminal_buffer[idx];
+                if (entry != fb_rendered_buffer[idx]) {
+                    fb_rendered_buffer[idx] = entry;
+                    char c = (char)(entry & 0xFF);
+                    uint8_t color = (uint8_t)(entry >> 8);
+                    fb_draw_char(x * 8, r * 16, c,
+                                 fb_vga_to_rgb(color & 0x0F), fb_vga_to_rgb((color >> 4) & 0x0F));
+                }
+            }
+        }
+    }
 }
 
 /* Move rows [top, bottom] down by n lines, blanking the top ones */
@@ -182,6 +261,22 @@ static void scroll_down(size_t top, size_t bottom, size_t n) {
         }
     }
     clear_cells(top * VGA_WIDTH, (top + n) * VGA_WIDTH);
+    if (fb_info.enabled) {
+        for (size_t r = top; r <= bottom; r++) {
+            size_t row_idx = r * VGA_WIDTH;
+            for (size_t x = 0; x < VGA_WIDTH; x++) {
+                size_t idx = row_idx + x;
+                uint16_t entry = terminal_buffer[idx];
+                if (entry != fb_rendered_buffer[idx]) {
+                    fb_rendered_buffer[idx] = entry;
+                    char c = (char)(entry & 0xFF);
+                    uint8_t color = (uint8_t)(entry >> 8);
+                    fb_draw_char(x * 8, r * 16, c,
+                                 fb_vga_to_rgb(color & 0x0F), fb_vga_to_rgb((color >> 4) & 0x0F));
+                }
+            }
+        }
+    }
 }
 
 /* Line feed: down one row, scrolling the region at its bottom edge */
@@ -240,8 +335,22 @@ static void put_raw(char c)
         for (size_t x = VGA_WIDTH - 1; x > terminal_column; x--) {
             terminal_buffer[line + x] = terminal_buffer[line + x - 1];
         }
+        if (fb_info.enabled) {
+            for (size_t x = terminal_column; x < VGA_WIDTH; x++) {
+                uint16_t entry = terminal_buffer[line + x];
+                fb_draw_char(x * 8, terminal_row * 16, (char)(entry & 0xFF),
+                             fb_vga_to_rgb(entry >> 8 & 0x0F), fb_vga_to_rgb((entry >> 12) & 0x0F));
+            }
+        }
     }
-    terminal_buffer[line + terminal_column] = vga_entry(uc, terminal_color);
+    uint16_t entry = vga_entry(uc, terminal_color);
+    terminal_buffer[line + terminal_column] = entry;
+    if (fb_info.enabled) {
+        fb_rendered_buffer[line + terminal_column] = entry;
+        fb_draw_char(terminal_column * 8, terminal_row * 16, uc,
+                     fb_vga_to_rgb(terminal_color & 0x0F),
+                     fb_vga_to_rgb((terminal_color >> 4) & 0x0F));
+    }
     if (terminal_column == VGA_WIDTH - 1) wrap_pending = 1;
     else terminal_column++;
 }
@@ -377,11 +486,25 @@ static void run_csi(char c) {
         for (size_t i = here; i < line + VGA_WIDTH; i++) {
             terminal_buffer[i] = (i + n < line + VGA_WIDTH) ? terminal_buffer[i + n] : vga_entry(' ', terminal_color);
         }
+        if (fb_info.enabled) {
+            for (size_t x = terminal_column; x < VGA_WIDTH; x++) {
+                uint16_t entry = terminal_buffer[line + x];
+                fb_draw_char(x * 8, terminal_row * 16, (char)(entry & 0xFF),
+                             fb_vga_to_rgb(entry >> 8 & 0x0F), fb_vga_to_rgb((entry >> 12) & 0x0F));
+            }
+        }
         break;
     case '@': /* insert blanks, shifting the rest of the line right */
         n = param(0, 1);
         for (size_t i = line + VGA_WIDTH; i-- > here;) {
             terminal_buffer[i] = (i >= here + n) ? terminal_buffer[i - n] : vga_entry(' ', terminal_color);
+        }
+        if (fb_info.enabled) {
+            for (size_t x = terminal_column; x < VGA_WIDTH; x++) {
+                uint16_t entry = terminal_buffer[line + x];
+                fb_draw_char(x * 8, terminal_row * 16, (char)(entry & 0xFF),
+                             fb_vga_to_rgb(entry >> 8 & 0x0F), fb_vga_to_rgb((entry >> 12) & 0x0F));
+            }
         }
         break;
     case 'X': /* erase characters in place */
@@ -446,6 +569,7 @@ void terminal_emit(char c)
     switch (ansi_state) {
     case ANSI_NORMAL:
         if (c == '\033') ansi_state = ANSI_ESC;
+        else if (c == '\a') audio_bell(); /* PC speaker, no glyph */
         else put_raw(c);
         return;
 

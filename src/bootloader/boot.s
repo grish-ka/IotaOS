@@ -5,11 +5,12 @@
  */
 
 /* Declare constants for the multiboot header. */
-.set ALIGN,    1<<0             /* align loaded modules on page boundaries */
-.set MEMINFO,  1<<1             /* provide memory map */
-.set FLAGS,    ALIGN | MEMINFO  /* this is the Multiboot 'flag' field */
-.set MAGIC,    0x1BADB002       /* 'magic number' lets bootloader find the header */
-.set CHECKSUM, -(MAGIC + FLAGS) /* checksum of above, to prove we are multiboot */
+.set ALIGN,     1<<0             /* align loaded modules on page boundaries */
+.set MEMINFO,   1<<1             /* provide memory map */
+.set VIDEOMODE, 1<<2             /* video mode table requested */
+.set FLAGS,     ALIGN | MEMINFO | VIDEOMODE  /* this is the Multiboot 'flag' field */
+.set MAGIC,     0x1BADB002       /* 'magic number' lets bootloader find the header */
+.set CHECKSUM,  -(MAGIC + FLAGS) /* checksum of above, to prove we are multiboot */
 
 /* 
 Declare a multiboot header that marks the program as a kernel. These are magic
@@ -23,6 +24,19 @@ forced to be within the first 8 KiB of the kernel file.
 .long MAGIC
 .long FLAGS
 .long CHECKSUM
+
+/* Offsets 12-28: Header address fields (unused since bit 16 is 0 for ELF) */
+.long 0
+.long 0
+.long 0
+.long 0
+.long 0
+
+/* Offsets 32-44: Video mode fields (used because bit 2 is set) */
+.long 0     /* mode_type: 0 = linear graphics, 1 = text */
+.long 1024  /* width: 1024 pixels */
+.long 768   /* height: 768 pixels */
+.long 32    /* depth: 32 bits per pixel */
 
 /*
 The multiboot standard does not define the value of the stack pointer register

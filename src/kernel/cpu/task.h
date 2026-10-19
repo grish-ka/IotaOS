@@ -14,8 +14,8 @@
 #define MAX_TASKS 32
 #define TASK_NAME_MAX 32
 
-/* Where a fresh address space's heap (sbrk) begins */
-#define TASK_HEAP_BASE 0x40000000
+/* Where a fresh address space's heap (sbrk) begins (2 GB boundary) */
+#define TASK_HEAP_BASE 0x80000000
 
 /* One row of the process list (SYS_PROCLIST), as `ps` reads it */
 typedef struct {

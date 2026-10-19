@@ -39,8 +39,11 @@ def main():
     files = []
     for d in DIRECTORIES:
         if os.path.exists(d):
-            for root, _, fs in os.walk(d):
-                for f in fs: files.append(os.path.join(root, f))
+            for root, dirs, fs in os.walk(d):
+                if "gnu" in dirs:
+                    dirs.remove("gnu")
+                for f in fs:
+                    files.append(os.path.join(root, f))
     files.extend([f for f in EXPLICIT_FILES if os.path.exists(f)])
 
     for path in files:

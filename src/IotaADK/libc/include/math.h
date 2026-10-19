@@ -113,6 +113,11 @@ float expf(float x);
 float logf(float x);
 float sinf(float x);
 float cosf(float x);
+float tanf(float x);
+float atan2f(float y, float x);
+float atanf(float x);
+float asinf(float x);
+float acosf(float x);
 
 long double fabsl(long double x);
 long double floorl(long double x);

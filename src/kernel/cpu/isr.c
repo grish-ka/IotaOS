@@ -7,6 +7,8 @@
 #include "drivers/terminal.h"
 #include "drivers/io.h"
 #include "drivers/keyboard.h"
+#include "drivers/mouse.h"
+#include "drivers/audio.h"
 #include "drivers/system.h"
 #include "isr.h"
 #include "task.h"
@@ -127,6 +129,16 @@ uint32_t irq_handler(uint32_t esp) {
         keyboard_handle_interrupt(regs);
         /* Ctrl-C may have just terminated the interrupted task */
         if (!task_current_active()) esp = task_schedule(esp);
+    }
+
+    /* If it is Interrupt 44 (IRQ 12), the PS/2 mouse caused it! */
+    if (regs->int_no == 44) {
+        mouse_handle_interrupt();
+    }
+
+    /* If it is Interrupt 37 (IRQ 5), the Sound Blaster DSP caused it! */
+    if (regs->int_no == 37) {
+        audio_irq();
     }
 
     /* task_yield(): a software interrupt, so no tick and no EOI */

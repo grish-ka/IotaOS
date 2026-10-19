@@ -75,13 +75,14 @@ int elf_load(void *file_data, uint32_t file_size, elf_image_t *image) {
     }
 
     uint32_t* new_dir = vmm_create_address_space();
-    if (!new_dir) return -1;
+    if (!new_dir) { printf("elf_loader: no address space\n"); return -1; }
 
     for (uint32_t i = 0; i < header->e_phnum; i++) {
         const Elf32_Phdr *program = &programs[i];
         if (program->p_type != PT_LOAD || program->p_memsz == 0) continue;
 
         if (map_zeroed(new_dir, program->p_vaddr, program->p_vaddr + program->p_memsz) != 0) {
+            printf("elf_loader: map seg 0x%x mem 0x%x failed\n", program->p_vaddr, program->p_memsz);
             vmm_free_address_space(new_dir);
             return -1;
         }
@@ -89,6 +90,7 @@ int elf_load(void *file_data, uint32_t file_size, elf_image_t *image) {
     }
 
     if (map_zeroed(new_dir, APP_ARGS_ADDR, APP_STACK_TOP) != 0) {
+        printf("elf_loader: map args/stack failed\n");
         vmm_free_address_space(new_dir);
         return -1;
     }

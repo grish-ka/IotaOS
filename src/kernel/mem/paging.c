@@ -7,6 +7,7 @@
 #include "mem/paging.h"
 #include "mem/pmm.h"
 #include "drivers/stdio.h"
+#include "drivers/fb.h"
 
 uint32_t* kernel_directory = 0;
 
@@ -46,6 +47,15 @@ void paging_init(uint32_t total_memory) {
     for (uint32_t i = 0; i < num_pages; i++) {
         uint32_t addr = i * PAGE_SIZE;
         vmm_map_page(kernel_directory, addr, addr, PAGE_PRESENT | PAGE_RW);
+    }
+
+    /* Map linear framebuffer if active (including high PCI addresses) */
+    if (fb_info.enabled) {
+        uint32_t fb_start = fb_info.paddr & ~0xFFF;
+        uint32_t fb_end = (fb_info.paddr + fb_info.size + 0xFFF) & ~0xFFF;
+        for (uint32_t a = fb_start; a < fb_end; a += PAGE_SIZE) {
+            vmm_map_page(kernel_directory, a, a, PAGE_PRESENT | PAGE_RW | PAGE_USER);
+        }
     }
 
     vmm_switch_directory(kernel_directory);

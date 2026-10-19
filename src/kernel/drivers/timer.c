@@ -8,6 +8,7 @@
 #include "io.h"
 #include "stdio.h"
 #include "terminal.h"
+#include "audio.h"
 #include "../cpu/task.h" /* <--- Include the scheduler! */
 
 /* Keep track of how many times the system has ticked since boot */
@@ -35,6 +36,7 @@ void timer_init(uint32_t frequency) {
 uint32_t timer_handler(uint32_t esp) {
     tick++;
     task_account_tick();
+    audio_tick(); /* '\a' bell auto-off */
     
     /* Ask the scheduler what task to run next! */
     return task_schedule(esp);
