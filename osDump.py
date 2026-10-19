@@ -12,6 +12,9 @@ import datetime
 # Configuration
 OUTPUT_FILE = "os_dump.txt"
 DIRECTORIES_TO_SCAN = ["src", "tools", ".github"]
+# Vendored third-party sources (GNU toolchain, idTech1 Doom engine):
+# not part of the IotaOS codebase, so exclude them from the context dump.
+SKIP_DIRS = {"gnu", "doomgeneric"}
 EXPLICIT_FILES = ["Makefile", "grub.cfg"]
 
 def get_markdown_lang(filename):
@@ -29,7 +32,8 @@ def main():
     
     for directory in DIRECTORIES_TO_SCAN:
         if os.path.exists(directory):
-            for root, _, files in os.walk(directory):
+            for root, dirs, files in os.walk(directory):
+                dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
                 for file in files:
                     if file.endswith(('.c', '.h', '.s', '.ld')):
                         all_files.append(os.path.join(root, file))
