@@ -754,15 +754,19 @@ int __fsetlocking(FILE *stream, int type) { (void)stream; (void)type; return FSE
 void __fpurge(FILE *stream) { stream->nungot = 0; }
 void __fseterr(FILE *stream) { stream->flags |= F_ERR; }
 void _flushlbf(void) {}
-size_t __freadahead(FILE *stream) { return (size_t)stream->nungot; }
+/* Advertise only the top pushed-back byte: the ungot stack is int[] and
+   LIFO, so no contiguous (ptr, size) window can expose it. One byte is
+   exactly what fgetc will hand back next. */
+size_t __freadahead(FILE *stream) { return stream->nungot ? 1 : 0; }
 
 const char *__freadptr(FILE *stream, size_t *sizep) {
+    static char byte;
     if (stream->nungot == 0) return NULL;
-    *sizep = (size_t)stream->nungot;
-    return (const char *)&stream->ungot[stream->nungot - 1];
+    byte = (char)stream->ungot[stream->nungot - 1];
+    *sizep = 1;
+    return &byte;
 }
 
 void __freadptrinc(FILE *stream, size_t increment) {
-    if (increment > (size_t)stream->nungot) increment = (size_t)stream->nungot;
-    stream->nungot -= (int)increment;
+    if (increment && stream->nungot > 0) stream->nungot--;
 }
