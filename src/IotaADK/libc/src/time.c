@@ -159,6 +159,9 @@ char *ctime(const time_t *timep) {
 size_t strftime(char *s, size_t max, const char *format, const struct tm *tm) {
     size_t o = 0;
     char tmp[64];
+    /* Year of century (00-99), valid also for years before 1900 */
+    int yy2 = (tm->tm_year + 1900) % 100;
+    if (yy2 < 0) yy2 += 100;
 
     for (const char *f = format; *f; f++) {
         if (*f != '%') {
@@ -181,7 +184,7 @@ size_t strftime(char *s, size_t max, const char *format, const struct tm *tm) {
                            tm->tm_year + 1900); break;
         case 'C': snprintf(tmp, sizeof(tmp), "%02d", (tm->tm_year + 1900) / 100); break;
         case 'd': snprintf(tmp, sizeof(tmp), "%02d", tm->tm_mday); break;
-        case 'D': snprintf(tmp, sizeof(tmp), "%02d/%02d/%02d", tm->tm_mon + 1, tm->tm_mday, tm->tm_year % 100); break;
+        case 'D': snprintf(tmp, sizeof(tmp), "%02d/%02d/%02d", tm->tm_mon + 1, tm->tm_mday, yy2); break;
         case 'e': snprintf(tmp, sizeof(tmp), "%2d", tm->tm_mday); break;
         case 'F': snprintf(tmp, sizeof(tmp), "%d-%02d-%02d", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday); break;
         case 'H': snprintf(tmp, sizeof(tmp), "%02d", tm->tm_hour); break;
@@ -208,8 +211,8 @@ size_t strftime(char *s, size_t max, const char *format, const struct tm *tm) {
         case 'X': snprintf(tmp, sizeof(tmp), "%02d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec); break;
         case 'u': snprintf(tmp, sizeof(tmp), "%d", tm->tm_wday ? tm->tm_wday : 7); break;
         case 'w': snprintf(tmp, sizeof(tmp), "%d", tm->tm_wday); break;
-        case 'x': snprintf(tmp, sizeof(tmp), "%02d/%02d/%02d", tm->tm_mon + 1, tm->tm_mday, tm->tm_year % 100); break;
-        case 'y': snprintf(tmp, sizeof(tmp), "%02d", tm->tm_year % 100); break;
+        case 'x': snprintf(tmp, sizeof(tmp), "%02d/%02d/%02d", tm->tm_mon + 1, tm->tm_mday, yy2); break;
+        case 'y': snprintf(tmp, sizeof(tmp), "%02d", yy2); break;
         case 'Y': snprintf(tmp, sizeof(tmp), "%d", tm->tm_year + 1900); break;
         case 'z': snprintf(tmp, sizeof(tmp), "+0000"); break;
         case 'Z': snprintf(tmp, sizeof(tmp), "UTC"); break;
