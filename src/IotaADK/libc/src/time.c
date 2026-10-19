@@ -84,6 +84,10 @@ struct tm *gmtime_r(const time_t *timep, struct tm *tm) {
     if (tm->tm_wday < 0) tm->tm_wday += 7;
 
     int year = 1970;
+    while (days < 0) {
+        year--;
+        days += is_leap(year) ? 366 : 365;
+    }
     for (;;) {
         int len = is_leap(year) ? 366 : 365;
         if (days < len) break;
@@ -126,7 +130,11 @@ __attribute__((weak)) time_t mktime(struct tm *tm) {
         year--;
     }
     long days = 0;
-    for (int y = 1970; y < year; y++) days += is_leap(y) ? 366 : 365;
+    if (year >= 1970) {
+        for (int y = 1970; y < year; y++) days += is_leap(y) ? 366 : 365;
+    } else {
+        for (int y = year; y < 1970; y++) days -= is_leap(y) ? 366 : 365;
+    }
     for (int m = 0; m < mon; m++) days += days_in_month(m, year);
     days += tm->tm_mday - 1;
     time_t t = days * 86400 + tm->tm_hour * 3600 + tm->tm_min * 60 + tm->tm_sec;
