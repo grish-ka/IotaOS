@@ -15,6 +15,7 @@
 #include <limits.h>
 #include <stdint.h>
 #include <errno.h>
+#include <math.h>
 
 /* Heap: first-fit free list grown with sbrk */
 typedef struct block_meta {
@@ -464,12 +465,37 @@ __attribute__((weak)) unsigned long strtoul(const char *nptr, char **endptr, int
     return neg ? (unsigned long)(0ULL - v) : (unsigned long)v;
 }
 
+/* Case-insensitive literal prefix match; returns chars matched, else 0 */
+static int ci_prefix(const char *s, const char *w) {
+    int n;
+    for (n = 0; w[n]; n++) {
+        char c = s[n];
+        if (c >= 'A' && c <= 'Z') c += 32;
+        if (c != w[n]) return 0;
+    }
+    return n;
+}
+
 __attribute__((weak)) double strtod(const char *nptr, char **endptr) {
     const char *s = nptr;
     double v = 0, scale = 1;
     int neg = 0, any = 0;
     while (*s == ' ' || (*s >= '\t' && *s <= '\r')) s++;
     if (*s == '-' || *s == '+') neg = (*s++ == '-');
+    /* inf / infinity / nan, case-insensitive, like glibc */
+    {
+        int n = ci_prefix(s, "inf");
+        if (n) {
+            s += n + ci_prefix(s + n, "inity");
+            if (endptr) *endptr = (char *)s;
+            return neg ? -HUGE_VAL : HUGE_VAL;
+        }
+        if ((n = ci_prefix(s, "nan"))) {
+            s += n;
+            if (endptr) *endptr = (char *)s;
+            return __builtin_nan("");
+        }
+    }
     for (; *s >= '0' && *s <= '9'; s++, any = 1) v = v * 10 + (*s - '0');
     if (*s == '.') {
         for (s++; *s >= '0' && *s <= '9'; s++, any = 1) {
@@ -479,12 +505,23 @@ __attribute__((weak)) double strtod(const char *nptr, char **endptr) {
     }
     if (any && (*s == 'e' || *s == 'E')) {
         const char *e = s + 1;
-        int eneg = 0, ev = 0;
+        int eneg = 0;
+        long ev = 0;
         if (*e == '-' || *e == '+') eneg = (*e++ == '-');
         if (*e >= '0' && *e <= '9') {
-            for (; *e >= '0' && *e <= '9'; e++) ev = ev * 10 + (*e - '0');
-            while (ev--) v = eneg ? v / 10 : v * 10;
+            /* Saturate: any exponent above 400 over/underflows a double.
+               Previously "1e99999999" spun ~1e8 loop iterations (hang). */
+            for (; *e >= '0' && *e <= '9'; e++)
+                if (ev < 100000) ev = ev * 10 + (*e - '0');
             s = e;
+            if (v != 0) {
+                if (ev > 400) ev = 400;
+                if (eneg) { for (long k = 0; k < ev; k++) v /= 10; }
+                else      { for (long k = 0; k < ev; k++) v *= 10; }
+                /* glibc sets ERANGE on overflow (result +-HUGE_VAL) and on
+                   underflow to zero (glibc returns +-0 with ERANGE) */
+                if (v == HUGE_VAL || v == -HUGE_VAL || v == 0) errno = ERANGE;
+            }
         }
     }
     if (endptr) *endptr = (char *)(any ? s : nptr);
